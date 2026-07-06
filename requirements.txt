@@ -1,0 +1,14 @@
+# 斑图生成器 — Python 依赖清单
+# 安装: pip install -r requirements.txt
+
+# 核心计算引擎（GPU/CPU 混合计算，CUDA 可选）
+torch>=2.0.0
+
+# 数值计算（数组操作、网格构建、统计）
+numpy>=1.24.0
+
+# 可视化（二维热力图、三维曲面、动画、图表嵌入 tkinter）
+matplotlib>=3.7.0
+
+# 系统监控（CPU/内存/GPU 使用率状态栏实时显示）
+psutil>=5.9.0
