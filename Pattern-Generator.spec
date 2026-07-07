@@ -1,13 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-斑图生成器 — PyInstaller 打包规格文件
+Pattern-Generator — PyInstaller 打包规格文件
 ====================================
 优化：onedir 模式启动更快，无临时解压开销。
 白名单控制依赖，排除无用模块缩小体积。
 
 用法:
-    pyinstaller 斑图生成器.spec       # 打包
-    pyinstaller --clean 斑图生成器.spec # 清理重打包
+    pyinstaller Pattern-Generator.spec       # 打包
+    pyinstaller --clean Pattern-Generator.spec # 清理重打包
 """
 
 import os
@@ -99,7 +99,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="斑图生成器",
+    name="Pattern-Generator",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -120,5 +120,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="斑图生成器",
+    name="Pattern-Generator",
 )
