@@ -12,6 +12,10 @@ Pattern-Generator — PyInstaller 打包规格文件
 
 import os
 import sys
+import PyInstaller.config
+
+# 输出路径：build 放入 dist 内，方便管理
+PyInstaller.config.CONF['workpath'] = 'dist/_build'
 
 # 使用相对路径避免中文目录编码问题
 
