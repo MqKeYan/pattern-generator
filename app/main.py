@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-斑图生成器 — 应用程序入口
-==========================
-基于反应-扩散方程的捕食者-猎物斑图生成与可视化工具。
+斑图生成器 — 应用程序入口 (旧版 tkinter，已废弃)
+============================================
+请使用项目根目录的 start.py 启动 Web 版本：
+    python start.py --host 0.0.0.0
+    主站:     http://<IP>:8000
+    后台管理: http://<IP>:8010
 
-用法:
+旧版 tkinter 桌面版本保留仅供参考：
     python app/main.py
-    python -m app.main
 """
 
 import os

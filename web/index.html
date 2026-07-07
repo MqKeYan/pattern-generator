@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>斑图生成器</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        'dt-bg-root': '#0B1120', 'dt-bg': '#0F172A',
+        'dt-bg-elevated': '#1E293B', 'dt-bg-input': '#1A2332',
+        'dt-bg-hover': '#334155', 'dt-border': '#1E3A5F',
+        'dt-border-focus': '#3B82F6', 'dt-text': '#F1F5F9',
+        'dt-text-secondary': '#94A3B8', 'dt-text-muted': '#64748B',
+        'dt-primary': '#3B82F6', 'dt-primary-light': '#60A5FA',
+        'dt-success': '#22C55E', 'dt-danger': '#EF4444',
+        'dt-warning': '#F59E0B',
+      }
+    }
+  }
+}
+</script>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body class="bg-dt-bg-root text-dt-text font-sans m-0 p-0 h-screen overflow-hidden">
+
+<div id="app" class="h-screen flex flex-col">
+  <!-- 状态栏 -->
+  <div class="h-8 bg-dt-bg-root text-dt-text-muted text-xs flex items-center px-3 shrink-0 border-b border-dt-border/30">
+    <span v-for="(seg, i) in statusSegments" :key="i">
+      <span v-if="i > 0" class="mx-2 text-dt-border">|</span>
+      <span>{{ seg }}</span>
+    </span>
+  </div>
+
+  <!-- 主体 -->
+  <div class="flex flex-1 min-h-0">
+    <!-- 左侧面板 -->
+    <div class="w-72 bg-dt-bg shrink-0 overflow-y-auto border-r border-dt-border/30 p-2 space-y-2">
+      <!-- 模型设置 -->
+      <div class="border border-dt-border rounded p-2">
+        <div class="text-dt-primary-light text-xs font-bold mb-1">模型设置</div>
+        <select v-model="currentModel" @change="onModelChange"
+                class="w-full bg-dt-bg-input border border-dt-border rounded px-2 py-1 text-xs text-dt-text mb-1">
+          <option v-for="m in models" :key="m" :value="m">{{ m }}</option>
+        </select>
+        <div class="flex gap-2 text-xs">
+          <span class="text-dt-text-secondary">迭代</span>
+          <input v-model.number="iterations" type="number" class="w-16 bg-dt-bg-input border border-dt-border rounded px-1 text-center" min="100" max="20000">
+          <span class="text-dt-text-secondary">帧数</span>
+          <input v-model.number="frames" type="number" class="w-14 bg-dt-bg-input border border-dt-border rounded px-1 text-center" min="10" max="1000">
+        </div>
+      </div>
+
+      <!-- 参数设置 -->
+      <div class="border border-dt-border rounded p-2">
+        <div class="text-dt-primary-light text-xs font-bold mb-1">参数设置</div>
+        <div v-for="(p, i) in currentParams" :key="i" class="flex items-center gap-1 mb-0.5">
+          <span class="text-dt-text-secondary text-xs w-28 truncate" :title="p.name">{{ p.name }}</span>
+          <input v-model.number="params[i]" type="number" step="any"
+                 class="flex-1 bg-dt-bg-input border border-dt-border rounded px-1 py-0.5 text-xs text-center">
+          <button @click="resetParam(i)" class="text-xs text-dt-text-muted hover:text-dt-primary px-1">重置</button>
+        </div>
+        <button @click="resetAllParams" class="w-full text-xs text-dt-text-muted hover:text-dt-primary mt-1">重置为默认值</button>
+      </div>
+
+      <!-- 初始值范围 -->
+      <div class="border border-dt-border rounded p-2">
+        <div class="text-dt-primary-light text-xs font-bold mb-1">初始值范围</div>
+        <div class="text-dt-text-secondary text-xs mb-1">{{ initDesc }}</div>
+        <div v-for="item in initRanges" :key="item.key" class="flex items-center gap-1 mb-0.5">
+          <span class="text-dt-text-secondary text-xs w-20">{{ item.label }}</span>
+          <input v-model.number="item.value" type="number" step="0.01"
+                 class="flex-1 bg-dt-bg-input border border-dt-border rounded px-1 py-0.5 text-xs text-center">
+          <button @click="resetInit(item.key)" class="text-xs text-dt-text-muted hover:text-dt-primary px-1">重置</button>
+        </div>
+        <button @click="applyBestInit" class="w-full text-xs text-dt-text-muted hover:text-dt-primary mt-1">应用最佳初始值</button>
+      </div>
+
+      <!-- 跟踪点 -->
+      <div class="border border-dt-border rounded p-2">
+        <div class="text-dt-primary-light text-xs font-bold mb-1">跟踪点</div>
+        <div class="flex gap-1 items-center mb-1">
+          <span class="text-xs text-dt-text-secondary">X</span>
+          <input v-model.number="trackX" type="number" class="w-12 bg-dt-bg-input border border-dt-border rounded px-1 text-xs text-center">
+          <span class="text-xs text-dt-text-secondary">Y</span>
+          <input v-model.number="trackY" type="number" class="w-12 bg-dt-bg-input border border-dt-border rounded px-1 text-xs text-center">
+          <button @click="addTrackPoint" class="text-xs bg-dt-primary text-white rounded px-2 py-0.5">+</button>
+          <button @click="clearTrackPoints" class="text-xs text-dt-text-muted hover:text-dt-danger px-1">清空</button>
+        </div>
+        <div class="text-xs text-dt-text-muted">{{ trackDisplay }}</div>
+      </div>
+
+      <!-- 任务状态 -->
+      <div class="border border-dt-border rounded p-2">
+        <div class="text-dt-primary-light text-xs font-bold mb-1">任务状态</div>
+        <div v-if="currentJobId" class="mb-1">
+          <div class="text-xs text-dt-text-secondary mb-1">{{ jobStatusText }}</div>
+          <div v-if="['running','queued'].includes(jobStatus)" class="w-full bg-dt-bg-input rounded h-2">
+            <div class="bg-dt-primary h-2 rounded transition-all duration-300" :style="{width: jobProgress+'%'}"></div>
+          </div>
+        </div>
+        <div v-else class="text-xs text-dt-text-muted">暂无运行中的任务</div>
+      </div>
+
+      <!-- 控制按钮 -->
+      <div class="border border-dt-border rounded p-2">
+        <div class="text-dt-primary-light text-xs font-bold mb-1">控制</div>
+        <div class="flex gap-2">
+          <button @click="runSimulation" :disabled="isSimulating"
+                  class="flex-1 bg-dt-primary text-white text-xs rounded py-1.5 disabled:opacity-50 hover:bg-dt-primary-light">运行</button>
+          <button @click="resetAll" class="flex-1 border border-dt-border text-dt-text-secondary text-xs rounded py-1.5 hover:bg-dt-bg-hover">重置</button>
+          <button @click="startAnimation" :disabled="!jobResult"
+                  class="flex-1 bg-dt-success text-white text-xs rounded py-1.5 disabled:opacity-50">播放</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧标签页区 -->
+    <div class="flex-1 bg-dt-bg flex flex-col min-w-0">
+      <div class="flex border-b border-dt-border/30 shrink-0">
+        <button v-for="(tab, i) in tabs" :key="i"
+                @click="activeTab = i"
+                :class="activeTab === i ? 'bg-dt-primary text-white' : 'bg-dt-bg-elevated text-dt-text-secondary hover:text-dt-text'"
+                class="px-6 py-2 text-xs font-medium border-r border-dt-border/30 transition-colors">
+          {{ tab }}
+        </button>
+      </div>
+      <div class="flex-1 min-h-0 p-2">
+        <div id="plot-container" class="w-full h-full"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

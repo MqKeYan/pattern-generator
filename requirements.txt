@@ -7,8 +7,10 @@ torch>=2.0.0
 # 数值计算（数组操作、网格构建、统计）
 numpy>=1.24.0
 
-# 可视化（二维热力图、三维曲面、动画、图表嵌入 tkinter）
-matplotlib>=3.7.0
-
-# 系统监控（CPU/内存/GPU 使用率状态栏实时显示）
+# 系统监控（CPU/内存/GPU 使用率）
 psutil>=5.9.0
+
+# Web 框架
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+aiofiles>=23.0.0

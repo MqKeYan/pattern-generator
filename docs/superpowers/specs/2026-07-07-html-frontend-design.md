@@ -3,7 +3,7 @@
 > **日期**: 2026-07-07  
 > **状态**: 已确认  
 > **目标**: 将 tkinter 桌面前端替换为 HTML 前端，保留布局设计，仅局域网使用  
-> **架构**: 主站 `:8000` + 后台管理 `:8001`，不同端口，共享后端
+> **架构**: 主站 `:8000` + 后台管理 `:8010`，不同端口，共享后端
 
 ---
 
@@ -31,7 +31,7 @@
     │
     ├─ http://<服务器IP>:8000  → 主站 (斑图生成器工作台，所有人使用)
     │
-    └─ http://<服务器IP>:8001  → 后台管理 (性能配置 + 监控，管理员使用)
+    └─ http://<服务器IP>:8010  → 后台管理 (性能配置 + 监控，管理员使用)
 
                     │                    │
                     ▼                    ▼
@@ -62,9 +62,9 @@
 | 8000 | `/` | 主站静态页面 (斑图生成器工作台) | 所有用户 |
 | 8000 | `/api/` | 主站业务 API (模拟、任务) | 所有用户 |
 | 8000 | `/ws/` | 主站 WebSocket (状态、任务通知) | 所有用户 |
-| 8001 | `/` | 后台管理静态页面 | 管理员 |
-| 8001 | `/api/` | 后台管理 API (池配置、系统监控) | 管理员 |
-| 8001 | `/ws/` | 后台 WebSocket (高频系统监控) | 管理员 |
+| 8010 | `/` | 后台管理静态页面 | 管理员 |
+| 8010 | `/api/` | 后台管理 API (池配置、系统监控) | 管理员 |
+| 8010 | `/ws/` | 后台 WebSocket (高频系统监控) | 管理员 |
 
 两个端口共享同一个 Python 进程内的 Worker 池和任务队列，`start.py` 一次性启动两个 uvicorn 实例。
 
@@ -125,7 +125,7 @@
 | GET | `/api/jobs/{job_id}` | 任务状态 + (如已完成)结果数据 |
 | DELETE | `/api/jobs/{job_id}` | 取消排队中的任务或删除已完成任务 |
 
-### 4.2 后台管理 REST 接口 (端口 8001)
+### 4.2 后台管理 REST 接口 (端口 8010)
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -223,7 +223,7 @@ POST /api/jobs  →  状态: queued  →  worker领取  →  状态: running  �
 | `/ws/status` | 每 3 秒推送简易系统状态 |
 | `/ws/jobs/{session_id}` | 该 session 的任务状态变更推送 |
 
-**后台管理 (端口 8001):**
+**后台管理 (端口 8010):**
 
 | 路径 | 说明 |
 |---|---|
@@ -356,11 +356,11 @@ def worker_loop(pipe, device_id):
 - **三维斑图**: Plotly.js 3D 曲面图
 - **动画演示**: Plotly.js 动画热力图 + 播放/暂停
 
-### 6.2 后台管理 (端口 8001)
+### 6.2 后台管理 (端口 8010)
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  后台管理 — 斑图生成器                            [8001]  │
+│  后台管理 — 斑图生成器                            [8010]  │
 ├──────────────────────┬───────────────────────────────────┤
 │  导航                │                                   │
 │  ◉ Worker池配置      │  实时系统监控                       │
@@ -493,20 +493,20 @@ memoryHistory     — 最近 10 分钟内存历史点
 ### 9.1 启动方式
 
 ```bash
-# 默认: 主站 8000, 后台 8001, 仅本机访问
+# 默认: 主站 8000, 后台 8010, 仅本机访问
 python start.py
 
 # 局域网部署: 同一网段设备均可访问
 python start.py --host 0.0.0.0
 
 # 自定义端口
-python start.py --host 0.0.0.0 --port 8000 --admin-port 8001
+python start.py --host 0.0.0.0 --port 8000 --admin-port 8010
 
 # 不自动打开浏览器
 python start.py --host 0.0.0.0 --no-browser
 ```
 
-局域网用户访问 `http://<服务器IP>:8000`，管理员访问 `http://<服务器IP>:8001`。
+局域网用户访问 `http://<服务器IP>:8000`，管理员访问 `http://<服务器IP>:8010`。
 
 ### 9.2 start.py
 
@@ -526,7 +526,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="斑图生成器 Web 服务")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--admin-port", type=int, default=8001)
+    parser.add_argument("--admin-port", type=int, default=8010)
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
 
