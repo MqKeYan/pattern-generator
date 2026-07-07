@@ -12,7 +12,6 @@ import asyncio
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import FileResponse
-import uvicorn
 
 from .main import pool, collector
 
