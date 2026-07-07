@@ -85,11 +85,15 @@ a = Analysis(
 )
 
 # ── 二次过滤 ─────────────────────────────────────────────
-# 只保留白名单内的模块，其余剔除
+# 保留：标准库 + 项目代码 + 白名单第三方库，其余剔除
+STDLIB_NAMES = set(sys.stdlib_module_names if hasattr(sys, 'stdlib_module_names') else [])
+STDLIB_NAMES.update(sys.builtin_module_names)
+PROJECT_TOPS = {'server', 'app', 'start'}
+
 filtered_pure = []
 for name, path, code in a.pure:
-    top = name.split(".")[0]
-    if top in ALLOW_TOP or name in HIDDEN_IMPORTS:
+    top = name.split('.')[0]
+    if top in ALLOW_TOP or top in PROJECT_TOPS or top in STDLIB_NAMES or name in HIDDEN_IMPORTS:
         filtered_pure.append((name, path, code))
 
 a.pure = filtered_pure
