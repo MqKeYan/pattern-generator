@@ -16,6 +16,7 @@ import PyInstaller.config
 
 # 输出路径：build 放入 dist 内，方便管理
 PyInstaller.config.CONF['workpath'] = 'dist/_build'
+os.makedirs('dist/_build', exist_ok=True)
 
 # 使用相对路径避免中文目录编码问题
 
