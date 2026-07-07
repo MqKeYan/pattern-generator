@@ -13,9 +13,7 @@ Pattern-Generator — PyInstaller 打包规格文件
 import os
 import sys
 
-ROOT = os.path.abspath(os.path.dirname(SPEC))
-WEB = os.path.join(ROOT, 'web')
-ENTRY = os.path.join(ROOT, 'start.py')
+# 使用相对路径避免中文目录编码问题
 
 # ── 白名单：只打包这些顶层库 ─────────────────────────────
 ALLOW_TOP = {
@@ -65,12 +63,12 @@ except (ImportError, FileNotFoundError):
 
 # ── 数据文件 ─────────────────────────────────────────────
 datas = [
-    (WEB, "web"),
+    ('web', 'web'),
 ]
 
 a = Analysis(
-    ENTRY,
-    pathex=[ROOT],
+    ['start.py'],
+    pathex=[],
     binaries=torch_binaries,
     datas=datas,
     hiddenimports=HIDDEN_IMPORTS,
