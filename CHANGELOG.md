@@ -10,7 +10,7 @@
 - **后台管理 (:8010)**: Worker 池配置 + 实时系统监控（CPU/GPU/内存/Worker 负载）
 - **`start.py`**: 一键启动双端口服务，仅局域网部署
 - 移除 matplotlib 依赖，可视化改用 Plotly.js
-- 旧版 tkinter 入口标记为已废弃
+- 移除旧版 tkinter 代码（app_window/ui_widgets/visualizer/theme/environment/version）
 
 ## v1.2.1 (2026-06-29) — 依赖文档完善
 
