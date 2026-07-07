@@ -12,9 +12,10 @@
 
 import os
 import sys
-from pathlib import Path
 
-ROOT = Path.cwd()  # 从当前目录执行，即项目根目录
+ROOT = os.path.abspath(os.path.dirname(SPEC))
+WEB = os.path.join(ROOT, 'web')
+ENTRY = os.path.join(ROOT, 'start.py')
 
 # ── 白名单：只打包这些顶层库 ─────────────────────────────
 ALLOW_TOP = {
@@ -51,34 +52,25 @@ HIDDEN_IMPORTS = [
 ]
 
 # ── Torch 共享库保护（防止被误排除） ─────────────────────
-torch_lib = None
+torch_binaries = []
 try:
     import torch
-    torch_lib = Path(torch.__file__).parent / "lib"
-except ImportError:
+    torch_lib = os.path.join(os.path.dirname(torch.__file__), 'lib')
+    for f in os.listdir(torch_lib):
+        fp = os.path.join(torch_lib, f)
+        if os.path.isfile(fp) and f.endswith(('.dll', '.dylib', '.so')):
+            torch_binaries.append((fp, 'torch/lib'))
+except (ImportError, FileNotFoundError):
     pass
-
-torch_binaries = []
-if torch_lib and torch_lib.exists():
-    torch_binaries = [
-        (str(f), "torch/lib")
-        for f in torch_lib.glob("*.dll") if f.name != "caffe2_nvrtc.dll"
-    ] + [
-        (str(f), "torch/lib")
-        for f in torch_lib.glob("*.dylib")
-    ] + [
-        (str(f), "torch/lib")
-        for f in torch_lib.glob("*.so*")
-    ]
 
 # ── 数据文件 ─────────────────────────────────────────────
 datas = [
-    (str(ROOT / "web"), "web"),
+    (WEB, "web"),
 ]
 
 a = Analysis(
-    str(ROOT / "start.py"),
-    pathex=[str(ROOT)],
+    ENTRY,
+    pathex=[ROOT],
     binaries=torch_binaries,
     datas=datas,
     hiddenimports=HIDDEN_IMPORTS,
