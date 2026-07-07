@@ -26,24 +26,6 @@ ALLOW_TOP = {
     "torch", "numpy", "psutil", "multiprocessing",
 }
 
-# ── 强制排除：体积大且不需要的库 ─────────────────────────
-BLOCK = [
-    "tkinter", "turtle", "matplotlib", "PIL", "Pillow",
-    "scipy", "pandas", "numba", "cupy",
-    "jupyter", "IPython", "notebook", "nbformat", "nbconvert",
-    "tornado", "zmq", "pygments",
-    "sqlalchemy", "alembic", "flask", "django", "jinja2",
-    "click", "rich", "prompt_toolkit", "colorama",
-    "curses", "readline", "pyreadline",
-    "pytest", "coverage", "tox", "hypothesis",
-    "setuptools", "pip", "wheel", "pkg_resources", "distutils",
-    "email", "html", "http", "xmlrpc", "xml",
-    "pdb", "doctest", "unittest", "test", "tests",
-    "ensurepip", "idlelib", "antigravity",
-    "boto3", "botocore", "urllib3", "requests",
-    "certifi", "charset_normalizer", "idna",
-]
-
 # ── uvicorn 动态加载 ─────────────────────────────────────
 UVICORN_HIDDEN = [
     "uvicorn.loops.auto", "uvicorn.loops.asyncio",
@@ -103,7 +85,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=BLOCK,
+    excludes=[],
     noarchive=False,
     optimize=0,
 )
