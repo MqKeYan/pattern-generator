@@ -11,7 +11,7 @@
 - **`start.py`**: 一键启动双端口服务，仅局域网部署
 - 移除 matplotlib 依赖，可视化改用 Plotly.js
 - 移除旧版 tkinter 代码（app_window/ui_widgets/visualizer/theme/environment/version）
-- 新增 `build.py`: PyInstaller 白名单打包脚本，控制依赖粒度
+- 新增 `斑图生成器.spec`: PyInstaller 白名单打包文件，直接指令打包
 
 ## v1.2.1 (2026-06-29) — 依赖文档完善
 
