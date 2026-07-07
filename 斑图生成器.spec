@@ -14,7 +14,7 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path(SPECPATH)
+ROOT = Path.cwd()  # 从当前目录执行，即项目根目录
 
 # ── 白名单：只打包这些顶层库 ─────────────────────────────
 ALLOW_TOP = {
