@@ -14,7 +14,7 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).parent
+ROOT = Path(SPECPATH)
 
 # ── 白名单：只打包这些顶层库 ─────────────────────────────
 ALLOW_TOP = {
