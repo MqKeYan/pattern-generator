@@ -22,15 +22,13 @@
 
 | 功能 | 说明 |
 |------|------|
-| 🧬 5 种数学模型 | Rosenzweig-MacArthur · Holling II · Ratio-dependent · 对称竞争 · 连续化离散模型 |
-| ⚡ GPU 加速 | PyTorch CUDA 后端，比纯 CPU 快 10-50 倍 |
+| ⚡ GPU 加速 | PyTorch CUDA 后端，比纯 CPU 快 |
 | 🖼️ 多维可视化 | Plotly.js 二维热力图 / 三维曲面 / 时序动画，自定义跟踪点 |
 | 🎛️ 参数调优 | 7-8 个参数滑块调节，实时切换模型，一键重置默认值 |
 | 🖥️ 双端口 Web 服务 | 主站 :8000 提交模拟 + 后台管理 :8010 监控系统 |
 | 👥 多用户支持 | Worker 进程池隔离，LAN 内多人同时提交任务 |
-| 📊 系统监控 | CPU / GPU 温度与占用、内存、磁盘、Worker 负载、任务统计，1 秒刷新 |
+| 📊 系统监控 | CPU / GPU 温度与占用、内存、磁盘、Worker 负载、任务统计 |
 | 🔧 Worker 池管理 | 后台页面配置 Worker 数量、GPU 开关、最大迭代数，支持热重启 |
-| 📦 单文件打包 | PyInstaller onedir 打包，解压即用，无需安装 Python 环境 |
 | 🌐 LAN 部署 | start.py 一键启动双端口服务，局域网任意设备浏览器访问 |
 
 ## 模型与斑图
@@ -49,8 +47,8 @@
 |------|---------|
 | 操作系统 | Windows 10 版本 1809 及以上 / Windows 11 |
 | 架构 | 64 位（x64） |
-| 内存 | 建议 4GB 及以上 |
-| GPU（可选） | NVIDIA GPU + CUDA 12.x，显存 2GB+ |
+| 内存 | 建议 8GB 及以上 |
+| GPU（可选） | NVIDIA GPU + CUDA 12.x，显存 4GB+ |
 | 浏览器 | Edge / Chrome / Firefox（访问 Web 界面） |
 
 ## 快速开始
@@ -59,8 +57,8 @@
 
 1. 从 [Releases](../../releases) 页面下载最新版 `.7z` 压缩包
 2. 解压到任意目录（**不要放在需要管理员权限的目录**，如 `C:\Program Files`）
-3. 注意 `Pattern-Generator.exe` 需要和 `_internal/` 文件夹在同一目录
-4. 双击运行 `Pattern-Generator.exe`，浏览器自动打开主站页面
+3. 注意 `pattern-generator.exe` 需要和 `_internal/` 文件夹在同一目录
+4. 双击运行 `pattern-generator.exe`，浏览器自动打开主站页面
 
 ### 从源码运行
 
@@ -80,16 +78,16 @@ python start.py --host 0.0.0.0
 
 启动后：
 - 主站：http://localhost:8000
-- 后台管理：http://localhost:8010
+- 后台：http://localhost:8010
 
 ### 打包为 exe
 
 ```bash
 pip install pyinstaller>=6.0
-pyinstaller Pattern-Generator.spec
+pyinstaller pattern-generator.spec
 ```
 
-打包产物在 `dist/Pattern-Generator/` 目录。
+打包产物在 `dist/pattern-generator/` 目录。
 
 ## 使用流程
 
