@@ -23,7 +23,3 @@ Thumbs.db
 # 测试
 tests/
 .pytest_cache/
-
-# 其他
-.claude/
-CHANGELOG.md
