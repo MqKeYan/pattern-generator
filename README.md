@@ -57,20 +57,21 @@
 
 1. 从 [Releases](../../releases) 页面下载最新版 `.7z` 压缩包
 2. 解压到任意目录（**不要放在需要管理员权限的目录**，如 `C:\Program Files`）
-3. 注意 `pattern-generator.exe` 需要和 `_internal/` 文件夹在同一目录
-4. 双击运行 `pattern-generator.exe`，浏览器自动打开主站页面
+3. 注意解压后的 `pattern-generator.exe` 需要和 `_internal/` 文件夹在同一目录
+4. 额外安装 `Pytorch` 依赖，支持 `CUDA 13.2` 版本的下载指令 `pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu132`，或者前往[官网](https://pytorch.org/get-started/locally/)
+5. 双击运行 `pattern-generator.exe`，浏览器自动打开主站页面
 
 ### 从源码运行
 
 ```bash
-# 环境要求：Python 3.10+
+# 环境要求：Python 3.13+
 git clone https://github.com/MqKeYan/pattern-generator.git
 cd pattern-generator
 pip install -r requirements.txt
 
-# GPU 加速（CUDA 12.x）
-pip install torch --index-url https://download.pytorch.org/whl/cu121
-pip install -r requirements.txt
+# GPU 加速（CUDA 13.2+）
+nvidia-smi #查看 CUDA 版本信息
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
 
 # 启动服务
 python start.py --host 0.0.0.0
