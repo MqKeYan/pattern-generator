@@ -27,6 +27,7 @@ class ResultStore:
         self.ttl = ttl_seconds
         self._cache = {}        # job_id -> {data, timestamp, session_id, size}
         self._sessions = {}     # session_id -> [job_id, ...]
+        self._read_cache = {}   # job_id -> data — 已读取的大结果缓存，避免反复读盘
         self._lock = threading.Lock()
 
         os.makedirs(_temp_dir, exist_ok=True)
@@ -67,15 +68,20 @@ class ResultStore:
                 self._delete(old_job)
 
     def get(self, job_id):
-        """获取任务结果"""
+        """获取任务结果（内存结果直接返回，磁盘结果缓存避免反复读盘）"""
         with self._lock:
             entry = self._cache.get(job_id)
             if entry is None:
                 return None
             entry["timestamp"] = time.time()  # 刷新 TTL
             if entry["on_disk"]:
+                # 优先走读缓存
+                if job_id in self._read_cache:
+                    return self._read_cache[job_id]
                 with open(entry["filepath"], "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                self._read_cache[job_id] = data
+                return data
             return entry["data"]
 
     def delete(self, job_id):
@@ -85,6 +91,7 @@ class ResultStore:
 
     def _delete(self, job_id):
         entry = self._cache.pop(job_id, None)
+        self._read_cache.pop(job_id, None)  # 同步清理读缓存
         if entry and entry.get("on_disk"):
             try:
                 os.remove(entry["filepath"])

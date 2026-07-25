@@ -14,7 +14,7 @@ if _project_root not in sys.path:
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 import torch
-from app.simulator import PatternSimulator
+from engine.simulator import PatternSimulator
 
 
 def worker_loop(pipe, worker_id, use_cuda):

@@ -15,22 +15,15 @@ import asyncio
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 
-from .pool import PoolManager
-from .store import ResultStore
-from .collector import SystemCollector
+from .shared import StaticFiles, pool, collector, store
+from app import __version__
 
 # 项目根目录
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# ── 共享实例 ──────────────────────────────────────────────
-store = ResultStore()
-pool = PoolManager(store=store)
-collector = SystemCollector(pool_manager=pool)
-
 # ── 创建主站 APP ─────────────────────────────────────────
-app = FastAPI(title="斑图生成器", version="1.3.0")
+app = FastAPI(title="斑图生成器", version=__version__)
 
 # 静态文件
 web_dir = os.path.join(ROOT, "web")
@@ -76,6 +69,12 @@ async def shutdown():
 
 # ── API 路由 ──────────────────────────────────────────────
 
+@app.get("/api/version")
+async def get_version():
+    """返回当前版本号"""
+    return {"version": __version__}
+
+
 @app.get("/api/session")
 async def get_session():
     """返回 session_id（前端通过 localStorage 维护）"""
@@ -85,7 +84,7 @@ async def get_session():
 @app.get("/api/models")
 async def get_models():
     """返回所有模型列表和完整配置"""
-    from app.config import MODEL_CONFIGS, MODEL_INIT_RANGES, PARAM_MEANINGS
+    from app.engine.config import MODEL_CONFIGS, MODEL_INIT_RANGES, PARAM_MEANINGS
     return {
         "models": list(MODEL_CONFIGS.keys()),
         "configs": {k: {
@@ -102,7 +101,7 @@ async def get_models():
 @app.get("/api/models/{model_id}")
 async def get_model(model_id: str):
     """返回单个模型的默认参数"""
-    from app.config import MODEL_CONFIGS, MODEL_INIT_RANGES, PARAM_MEANINGS
+    from app.engine.config import MODEL_CONFIGS, MODEL_INIT_RANGES, PARAM_MEANINGS
     config = MODEL_CONFIGS.get(model_id)
     if config is None:
         return JSONResponse({"error": f"模型 '{model_id}' 不存在"}, status_code=404)
@@ -167,9 +166,10 @@ async def get_job(job_id: str):
 
 @app.delete("/api/jobs/{job_id}")
 async def delete_job(job_id: str):
-    """取消/删除任务"""
+    """取消/删除任务，同时清理结果数据"""
     cancelled = pool.cancel_job(job_id)
     if cancelled:
+        store.delete(job_id)
         return {"status": "cancelled"}
     return JSONResponse({"error": "无法取消运行中的任务"}, status_code=400)
 
@@ -204,22 +204,4 @@ async def ws_status(websocket: WebSocket):
         status_connections.discard(websocket)
 
 
-@app.websocket("/ws/jobs/{session_id}")
-async def ws_jobs(websocket: WebSocket, session_id: str):
-    """特定 session 的任务状态推送"""
-    await websocket.accept()
-    if session_id not in job_connections:
-        job_connections[session_id] = set()
-    job_connections[session_id].add(websocket)
-    try:
-        while True:
-            await asyncio.sleep(30)
-            data = await websocket.receive_text()
-            if data:
-                pass
-    except WebSocketDisconnect:
-        pass
-    finally:
-        job_connections[session_id].discard(websocket)
-        if not job_connections[session_id]:
-            del job_connections[session_id]
+# /ws/jobs — 预留给未来前端任务状态推送功能，当前未连接

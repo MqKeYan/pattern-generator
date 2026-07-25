@@ -21,6 +21,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import uvicorn
+from app import __version__
 
 
 def run_server(app_path, host, port, log_level="info"):
@@ -42,7 +43,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print("=" * 50)
-    print("  斑图生成器 v1.3.0")
+    print(f"  斑图生成器 v{__version__}")
     print(f"  主站:     http://{args.host}:{args.port}")
     print(f"  后台管理: http://{args.host}:{args.admin_port}")
     print("=" * 50)
@@ -50,7 +51,7 @@ if __name__ == "__main__":
     # 启动后台管理（独立线程）
     t = threading.Thread(
         target=run_server,
-        args=("server.admin_app:admin_app", args.host, args.admin_port),
+        args=("app.server.admin_app:admin_app", args.host, args.admin_port),
         daemon=True,
     )
     t.start()
@@ -61,4 +62,4 @@ if __name__ == "__main__":
             f"http://{args.host}:{args.port}")).start()
 
     # 主站在主线程运行
-    run_server("server.main:app", args.host, args.port)
+    run_server("app.server.main:app", args.host, args.port)

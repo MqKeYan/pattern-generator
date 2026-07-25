@@ -35,6 +35,8 @@ createApp({
     );
 
     // 系统状态
+    const appVersion = ref('');
+
     const uptime = ref('00:00:00');
     const cpuPercent = ref(0);
     const gpuPercent = ref(0);
@@ -63,7 +65,7 @@ createApp({
     });
 
     const statusSegments = computed(() => [
-      '版本号: 1.3.0',
+      '版本号: ' + (appVersion.value || '...'),
       '运行时间: ' + uptime.value,
       'CPU: ' + cpuPercent.value + '%',
       'GPU: ' + gpuPercent.value + '%',
@@ -384,9 +386,14 @@ createApp({
     }
 
     // ── 生命周期 ────────────────────────────────────
-    onMounted(() => {
+    onMounted(async () => {
       fetchModels();
       connectStatusWS();
+      try {
+        const vr = await fetch('/api/version');
+        const vd = await vr.json();
+        appVersion.value = vd.version;
+      } catch (e) { /* ignore */ }
     });
 
     return {
@@ -396,7 +403,7 @@ createApp({
       trackX, trackY, trackPoints, trackDisplay,
       sessionId,
       currentJobId, jobStatus, jobProgress, jobResult, isSimulating,
-      uptime, cpuPercent, gpuPercent, memMb,
+      appVersion, uptime, cpuPercent, gpuPercent, memMb,
       workersBusy, workersTotal, queueLength,
       activeTab, tabs,
       currentParams, statusSegments, jobStatusText, initRanges,

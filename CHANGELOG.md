@@ -1,5 +1,21 @@
 # 更新日志
 
+## v1.3.1 (2026-07-25) — 代码审计修复
+
+- **修复**: `StaticFiles` 挂载在根路径，WebSocket 连接触发 `AssertionError` — 包装类忽略非 HTTP scope
+- **修复**: `_recover_worker` 竞态条件，池停止后 worker 恢复导致 `IndexError`
+- **修复**: `get_job_stats()` 内调用 `get_workers_status()` 导致 Lock 死锁
+- **修复**: GPU 显存总量硬编码 8192 MB → 改为动态查询 `torch.cuda.get_device_properties()`
+- **修复**: `_disk_scan_counter` 用 `getattr` 动态初始化 → 移到 `__init__` 显式声明
+- **修复**: `collector._collect()` 内部每秒 `import torch` → 提升到模块顶部
+- **重构**: 共享实例 (`pool`/`collector`/`store`/`StaticFiles`) 抽取到 `server/shared.py`，消除跨模块导入
+- **重构**: 版本号统一来源为 `app.__version__`，`start.py`/FastAPI/前端均动态获取；新增 `/api/version` 端点
+- **重构**: `collector` 不再直接访问 `pool._lock`/`job_statuses`，改用 `pool.get_job_stats()` 公开 API
+- **新增**: `store.delete()` 连接到 `DELETE /api/jobs/{job_id}`，取消任务时清理结果数据
+- **新增**: `store.get()` 内存读缓存，避免磁盘大结果反复读盘
+- **新增**: 基础测试套件 `tests/` — 41 个测试覆盖模型函数、PoolManager 状态机、ResultStore
+- **清理**: 移除 `ws_jobs` 空实现存根（预留注释）；移除 `main.py`/`admin_app.py` 中重复的 StaticFiles 类
+
 ## v1.3.0 (2026-07-07) — HTML 前端改造
 
 - **架构变更**: tkinter 桌面应用 → 前后端分离 Web 应用

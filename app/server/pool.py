@@ -10,6 +10,8 @@ import time
 import uuid
 from collections import deque
 
+import psutil
+
 
 class PoolManager:
     """Worker 进程池
@@ -41,7 +43,7 @@ class PoolManager:
         self.config = {
             "worker_count": 1,
             "use_gpu": True,
-            "max_iterations": 20000,
+            "max_iterations": 20000,  # 默认值，start() 时根据 GPU 调整
         }
 
         # 状态变更回调 (WebSocket 推送用)
@@ -52,15 +54,42 @@ class PoolManager:
         if self._running:
             return
 
-        if worker_count is not None:
-            self.config["worker_count"] = worker_count
-        if use_gpu is not None:
-            self.config["use_gpu"] = use_gpu
+        # 自动检测硬件，设置合理默认值
+        gpu_available = self._detect_gpu()
+        if use_gpu is None:
+            use_gpu = gpu_available
+        if worker_count is None:
+            worker_count = self._auto_detect_worker_count(gpu_available)
+
+        self.config["worker_count"] = worker_count
+        self.config["use_gpu"] = use_gpu
+        # GPU 机器可跑更多迭代，CPU 机器降低上限避免等待过久
+        self.config["max_iterations"] = 20000 if use_gpu else 5000
+
+        print(f"[Pool] 启动 {worker_count} 个 Worker, GPU={'是' if use_gpu else '否'}, 最大迭代={self.config['max_iterations']}")
 
         self._running = True
         self._spawn_workers()
         self._result_thread = threading.Thread(target=self._result_loop, daemon=True)
         self._result_thread.start()
+
+    def _detect_gpu(self):
+        """检测是否有可用的 CUDA GPU"""
+        try:
+            import torch
+            return torch.cuda.is_available()
+        except Exception:
+            return False
+
+    def _auto_detect_worker_count(self, gpu_available):
+        """根据硬件返回合理的 Worker 数量"""
+        if gpu_available:
+            import torch
+            # GPU 模式: 每个 GPU 一个 Worker
+            return max(1, torch.cuda.device_count())
+        # CPU 模式: 物理核心 - 1，最少 1 个，最多 4 个
+        cpu_physical = psutil.cpu_count(logical=False) or 1
+        return max(1, min(4, cpu_physical - 1))
 
     def _spawn_workers(self):
         for i in range(self.config["worker_count"]):
@@ -244,6 +273,13 @@ class PoolManager:
 
     def _recover_worker(self, wid):
         """尝试恢复崩溃的 Worker"""
+        # 池已停止或 wid 越界，跳过恢复
+        if not self._running:
+            return
+        if wid >= len(self.workers):
+            print(f"[Pool] Worker {wid} 恢复时索引越界，跳过")
+            return
+
         try:
             proc, pipe = self.workers[wid]
             proc.join(timeout=1)
@@ -270,6 +306,39 @@ class PoolManager:
         with self._lock:
             return len(self.pending_jobs)
 
+    def get_job_stats(self):
+        """获取任务统计（供 SystemCollector 使用）"""
+        with self._lock:
+            jobs_total = len(self.job_statuses)
+            jobs_completed = sum(1 for s in self.job_statuses.values()
+                                 if s.get("status") == "completed")
+            jobs_queued = sum(1 for s in self.job_statuses.values()
+                              if s.get("status") == "queued")
+            jobs_failed = sum(1 for s in self.job_statuses.values()
+                              if s.get("status") == "error")
+            queue_len = len(self.pending_jobs)
+            # 在锁内收集 workers 快照，避免后续加锁死锁
+            workers_snapshot = []
+            for wid, (proc, _) in enumerate(self.workers):
+                job_id = self.worker_jobs.get(wid)
+                status = "busy" if job_id else "idle"
+                progress = self.job_statuses[job_id].get("progress") if job_id and job_id in self.job_statuses else None
+                workers_snapshot.append({
+                    "id": wid,
+                    "status": status,
+                    "job_id": job_id,
+                    "progress": progress,
+                })
+
+        return {
+            "total": jobs_total,
+            "completed": jobs_completed,
+            "queued": jobs_queued,
+            "failed": jobs_failed,
+            "queue_length": queue_len,
+            "workers": workers_snapshot,
+        }
+
     def get_config(self):
         """获取当前配置"""
         with self._lock:
@@ -278,5 +347,5 @@ class PoolManager:
 
 def _worker_entry(pipe, worker_id, use_cuda):
     """子进程入口—包装 worker_loop"""
-    from server.worker import worker_loop
+    from app.server.worker import worker_loop
     worker_loop(pipe, worker_id, use_cuda)

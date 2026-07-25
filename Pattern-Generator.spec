@@ -68,7 +68,7 @@ except (ImportError, FileNotFoundError):
 
 # ── 数据文件 ─────────────────────────────────────────────
 datas = [
-    ('web', 'web'),
+    ('app/web', 'app/web'),
 ]
 
 a = Analysis(
@@ -80,7 +80,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['tests'],  # 测试仅开发用，不打包
     noarchive=False,
     optimize=0,
 )
@@ -89,7 +89,7 @@ a = Analysis(
 # 保留：标准库 + 项目代码 + 白名单第三方库，其余剔除
 STDLIB_NAMES = set(sys.stdlib_module_names if hasattr(sys, 'stdlib_module_names') else [])
 STDLIB_NAMES.update(sys.builtin_module_names)
-PROJECT_TOPS = {'server', 'app', 'start'}
+PROJECT_TOPS = {'app', 'start'}
 
 filtered_pure = []
 for name, path, code in a.pure:

@@ -5,7 +5,7 @@ __pycache__/
 # PyInstaller 打包产物
 dist/
 
-# 运行时临时文件 (ResultStore)
+# 运行时临时文件
 temp/
 
 # 虚拟环境
@@ -19,3 +19,11 @@ venv/
 # 操作系统
 .DS_Store
 Thumbs.db
+
+# 测试
+tests/
+.pytest_cache/
+
+# 其他
+.claude/
+CHANGELOG.md
