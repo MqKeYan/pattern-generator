@@ -73,7 +73,7 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
 python start.py --host 0.0.0.0
 ```
 
-启动后浏览器访问 **http://localhost:5000**。
+启动后浏览器访问 **http://localhost:5000** 。
 
 ## 使用流程
 
