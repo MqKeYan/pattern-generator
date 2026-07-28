@@ -4,11 +4,11 @@ python_requires>=3.13
 # GPU 加速 (CUDA 12.x): pip install torch --index-url https://download.pytorch.org/whl/cu121
 # 纯 CPU 模式: pip install torch --index-url https://download.pytorch.org/whl/cpu
 numpy>=1.24.0              # 多维数组与数值计算
+torch>=2.0.0               # GPU/CPU张量计算
 
 # Web 框架
-fastapi>=0.110.0           # 高性能异步 Web 框架
-uvicorn[standard]>=0.27.0   # ASGI 服务器 (含 websockets、httptools)
-aiofiles>=23.0.0            # 异步文件 I/O (StaticFiles 优化)
+flask>=3.0.0               # Web服务器框架
+waitress>=3.0.0             # 生产级WSGI服务器 (Windows兼容)
 
 # 系统监控
 psutil>=5.9.0              # 跨平台系统资源监控 (CPU/内存)

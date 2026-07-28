@@ -6,11 +6,10 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Platform-Windows%2010%2F11%20x64-lightgrey"></a>
   <a href="#"><img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white"></a>
-  <a href="#"><img src="https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white"></a>
+  <a href="#"><img src="https://img.shields.io/badge/Flask-3.0+-000000?logo=flask&logoColor=white"></a>
   <a href="#"><img src="https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Vue-3.x-4FC08D?logo=vuedotjs&logoColor=white"></a>
+  <a href="#"><img src="https://img.shields.io/badge/Plotly.js-2.32+-3F4F75?logo=plotly&logoColor=white"></a>
 </p>
 
 <p align="center">
@@ -91,13 +90,14 @@ python start.py --host 0.0.0.0
 ## 项目结构
 
 ```
-APP/                                 # 软件代码
+app/                                 # 软件代码
 ├── config.py                        # 模型参数配置
 ├── models.py                        # 5 种反应扩散方程 + 拉普拉斯算子
 ├── simulation.py                    # 模拟引擎 — 网格初始化、迭代、内存管理
 ├── visualization.py                 # 可视化数据生成 — Plotly JSON 格式
-├── server.py                        # Flask Web 服务 — API + 页面路由
+├── server.py                        # FastAPI Web 服务 — API + 页面路由
 ├── utils.py                         # 环境变量设置
+├── version.py                       # 版本号管理
 ├── static/
 │   ├── css/style.css                # 深色科技风主题样式
 │   └── js/app.js                    # 前端逻辑 — Plotly.js 图表渲染
@@ -105,9 +105,6 @@ APP/                                 # 软件代码
     └── index.html                   # 主页面
 
 run.py                               # 启动脚本
-requirements.txt                     # Python 依赖
-CHANGELOG.md                         # 更新日志
-原始代码/                            # 原始 tkinter 版本存档
 ```
 
 ## 讨论与交流
