@@ -1,8 +1,8 @@
-python_requires>=3.13
+# python_requires>=3.13
 
 # 计算引擎
-# GPU 加速 (CUDA 12.x): pip install torch --index-url https://download.pytorch.org/whl/cu121
-# 纯 CPU 模式: pip install torch --index-url https://download.pytorch.org/whl/cpu
+# GPU 加速 (CUDA 12.x): pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
+# 纯 CPU 模式: pip install torch torchvision
 numpy>=1.24.0              # 多维数组与数值计算
 torch>=2.0.0               # GPU/CPU张量计算
 
