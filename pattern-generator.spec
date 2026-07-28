@@ -136,7 +136,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon=os.path.join(PROJECT_ROOT, 'src', 'static', 'favicon.ico'),
 )
 
 coll = COLLECT(
