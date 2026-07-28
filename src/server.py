@@ -31,8 +31,21 @@ from version import VERSION
 from simulation import PatternSimulator
 from visualization import PatternVisualizer
 
-# 创建Flask应用
-app = Flask(__name__)
+# 获取模板和静态文件路径
+if getattr(sys, 'frozen', False):
+    # PyInstaller打包后的路径，模板文件在src/templates
+    template_folder = os.path.join(sys._MEIPASS, 'src', 'templates')
+    static_folder = os.path.join(sys._MEIPASS, 'src', 'static')
+else:
+    # 开发环境的路径
+    base_path = os.path.dirname(__file__)
+    template_folder = os.path.join(base_path, 'templates')
+    static_folder = os.path.join(base_path, 'static')
+
+# 创建Flask应用，设置模板和静态文件路径
+app = Flask(__name__,
+            template_folder=template_folder,
+            static_folder=static_folder)
 
 # 初始化模拟器和可视化器
 use_cuda = torch.cuda.is_available()
