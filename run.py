@@ -6,8 +6,57 @@ import signal
 import gc
 import subprocess
 
-# 将app文件夹加入模块搜索路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+# PyInstaller打包后只能看到_internal/目录，需添加系统site-packages
+# 以便加载用户自行安装的包（如PyTorch）
+if getattr(sys, 'frozen', False):
+    # 收集所有包含PyTorch的路径
+    torch_paths = []
+
+    # 使用where命令查找所有Python
+    try:
+        result = subprocess.run(['where', 'python'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            for line in result.stdout.split('\n'):
+                python_path = line.strip()
+                if python_path and python_path.lower().endswith('python.exe'):
+                    python_dir = os.path.dirname(python_path)
+                    for site_path in [os.path.join(python_dir, 'Lib', 'site-packages'), os.path.join(python_dir, 'site-packages')]:
+                        if os.path.isdir(os.path.join(site_path, 'torch')) and site_path not in torch_paths:
+                            torch_paths.append(site_path)
+    except:
+        pass
+
+    # 让用户选择PyTorch版本
+    if len(torch_paths) > 1:
+        print("=" * 60)
+        print(f"找到 {len(torch_paths)} 个PyTorch安装：")
+        for i, path in enumerate(torch_paths, 1):
+            print(f"{i}. {path}")
+        print("=" * 60)
+        while True:
+            choice = input("请选择要使用的PyTorch版本 (输入序号): ").strip()
+            if choice.isdigit() and 1 <= int(choice) <= len(torch_paths):
+                selected_path = torch_paths[int(choice) - 1]
+                if selected_path not in sys.path:
+                    sys.path.insert(0, selected_path)
+                break
+    elif torch_paths:
+        if torch_paths[0] not in sys.path:
+            sys.path.insert(0, torch_paths[0])
+
+# 将src文件夹加入模块搜索路径
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+# 检测PyTorch是否可用
+try:
+    import torch
+except ImportError:
+    print("=" * 60)
+    print("错误: 未检测到PyTorch！")
+    print("请先安装PyTorch后再次运行此程序")
+    print("=" * 60)
+    input("按回车键退出...")
+    sys.exit(1)
 
 from server import app, client_cache, simulator
 from waitress import serve
