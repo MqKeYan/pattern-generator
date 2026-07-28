@@ -51,11 +51,11 @@
 
 ### 下载 & 运行
 
-1. 从 [Releases](../../releases) 页面下载最新版 `.7z` 压缩包
+1. 从 [Releases](../../releases) 页面下载最新版 `.zip` 压缩包
 2. 解压到任意目录（**不要放在需要管理员权限的目录**，如 `C:\Program Files`）
 3. 注意解压后的 `pattern-generator.exe` 需要和 `_internal/` 文件夹在同一目录
-4. 额外安装 `Pytorch` 依赖，支持 `CUDA 13.2` 版本的下载指令 `pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu132`，或者前往[官网](https://pytorch.org/get-started/locally/)
-5. 双击运行 `pattern-generator.exe`，浏览器自动打开主站页面
+4. 额外安装 `Pytorch` 依赖，支持 `CUDA 13.2+` 版本的下载指令为 `pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu132`，或者前往[官网](https://pytorch.org/get-started/locally/)
+5. 双击运行 `pattern-generator.exe`，点击命令行网址自动打开页面
 
 ### 从源码运行
 
@@ -65,9 +65,11 @@ git clone https://github.com/MqKeYan/pattern-generator.git
 cd pattern-generator
 pip install -r requirements.txt
 
-# GPU 加速（CUDA 13.2+）
-nvidia-smi #查看 CUDA 版本信息
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132 #下载支持CUDA的Pytorch
+# GPU 加速
+# 查看 CUDA 版本信息
+nvidia-smi
+# 下载对应 CUDA 版本的 Pytorch
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
 
 # 启动服务
 python start.py --host 0.0.0.0
@@ -90,7 +92,7 @@ python start.py --host 0.0.0.0
 ## 项目结构
 
 ```
-app/                                 # 软件代码
+src/                                 # 软件代码
 ├── config.py                        # 模型参数配置
 ├── models.py                        # 5 种反应扩散方程 + 拉普拉斯算子
 ├── simulation.py                    # 模拟引擎 — 网格初始化、迭代、内存管理
