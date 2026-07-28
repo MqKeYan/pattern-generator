@@ -1,12 +1,11 @@
 <h1 align="center">
   <br>
-  <strong>🦋 斑图生成器——反应扩散方程可视化工具</strong>
+  <strong> 斑图生成器——反应扩散方程可视化工具</strong>
   <br>
 </h1>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Release-v1.3.1-brightgreen"></a>
   <a href="#"><img src="https://img.shields.io/badge/Platform-Windows%2010%2F11%20x64-lightgrey"></a>
   <a href="#"><img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white"></a>
   <a href="#"><img src="https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white"></a>
@@ -15,21 +14,19 @@
 </p>
 
 <p align="center">
-  <strong> 5 种捕食者-猎物反应扩散模型，GPU 加速模拟，实时可视化螺旋波、斑点、条纹等斑图形成过程 </strong>
+  <strong> 5 种捕食者-猎物反应扩散模型，GPU 加速模拟，交互式可视化螺旋波、斑点、条纹等斑图形成过程 </strong>
 </p>
 
 ## 功能概览
 
 | 功能 | 说明 |
 |------|------|
-| ⚡ GPU 加速 | PyTorch CUDA 后端，比纯 CPU 快 |
-| 🖼️ 多维可视化 | Plotly.js 二维热力图 / 三维曲面 / 时序动画，自定义跟踪点 |
-| 🎛️ 参数调优 | 7-8 个参数滑块调节，实时切换模型，一键重置默认值 |
-| 🖥️ 双端口 Web 服务 | 主站 :8000 提交模拟 + 后台管理 :8010 监控系统 |
-| 👥 多用户支持 | Worker 进程池隔离，LAN 内多人同时提交任务 |
-| 📊 系统监控 | CPU / GPU 温度与占用、内存、磁盘、Worker 负载、任务统计 |
-| 🔧 Worker 池管理 | 后台页面配置 Worker 数量、GPU 开关、最大迭代数，支持热重启 |
-| 🌐 LAN 部署 | start.py 一键启动双端口服务，局域网任意设备浏览器访问 |
+|  GPU 加速 | PyTorch CUDA 后端，比纯 CPU 快数十倍 |
+|  多维可视化 | Plotly.js 二维热力图 / 三维表面图 / 时间演化曲线 |
+|  动画演化 | 逐帧播放斑图演化过程，支持暂停、调速、帧跳转 |
+|  参数调优 | 7-8 个参数自由调节，实时切换模型，一键重置默认值 |
+|  自定义跟踪点 | 在网格任意位置设置观察点，追踪种群密度随时间变化 |
+|  内存管理 | 模拟完成后自动清理 GPU 显存，防止内存泄漏 |
 
 ## 模型与斑图
 
@@ -48,7 +45,7 @@
 | 操作系统 | Windows 10 版本 1809 及以上 / Windows 11 |
 | 架构 | 64 位（x64） |
 | 内存 | 建议 8GB 及以上 |
-| GPU（可选） | NVIDIA GPU + CUDA 12.x，显存 4GB+ |
+| GPU（可选） | NVIDIA GPU + CUDA 12.x+，显存 4GB+ |
 | 浏览器 | Edge / Chrome / Firefox（访问 Web 界面） |
 
 ## 快速开始
@@ -71,66 +68,46 @@ pip install -r requirements.txt
 
 # GPU 加速（CUDA 13.2+）
 nvidia-smi #查看 CUDA 版本信息
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132 #下载支持CUDA的Pytorch
 
 # 启动服务
 python start.py --host 0.0.0.0
 ```
 
-启动后：
-- 主站：http://localhost:8000
-- 后台：http://localhost:8010
-
-### 打包为 exe
-
-```bash
-pip install pyinstaller>=6.0
-pyinstaller pattern-generator.spec
-```
-
-打包产物在 `dist/pattern-generator/` 目录。
+启动后浏览器访问 **http://localhost:5000**。
 
 ## 使用流程
 
-1. **选择模型**：首页下拉选择 5 种模型之一，参数面板自动加载默认值
-2. **调整参数**：拖动滑块或直接输入参数值，点击参数名旁的 ↺ 按钮重置单个参数
-3. **设置跟踪点**（可选）：输入网格坐标 (0-99)，添加自定义跟踪点观察时间演化
-4. **启动模拟**：调整迭代次数，点击「开始模拟」，实时查看进度
-5. **查看结果**：二维热力图（X种群 / Y种群 / 合并斑图）+ 中心点演化曲线
-6. **管理后台**：打开 :8010 端口，配置 Worker 池、监控系统资源、查看任务队列
+1. **选择模型**：下拉选择 5 种模型之一，参数面板自动加载默认值
+2. **调整参数**：修改参数值，点击 ↺ 按钮重置单个参数，点击「重置参数」恢复全部默认值
+3. **设置初始值范围**：调节 X/Y 种群的初始密度范围
+4. **添加跟踪点**（可选）：输入网格坐标 (0-99)，观察指定位置的种群变化
+5. **运行模拟**：调整迭代次数，点击「运行模拟」，查看结果
+6. **查看结果**：
+   - **二维斑图**：X种群 / Y种群 热力图 + 合并斑图 + 时间演化曲线
+   - **三维斑图**：种群密度 3D 表面图
+   - **动画演化**：逐帧播放斑图形成过程
 
 ## 项目结构
 
 ```
-app/                                 # 正式软件代码
-├── __init__.py                      # 版本号
-│
-├── engine/                          # 计算引擎
-│   ├── config.py                    # 模型参数配置 — 参数名、默认值、初始范围、含义
-│   ├── models.py                    # 5 种反应扩散方程实现 + 拉普拉斯算子
-│   └── simulator.py                 # 模拟引擎 — 网格初始化、迭代、内存管理、历史记录
-│
-├── server/                          # FastAPI 后端
-│   ├── shared.py                    # 共享实例与工具类（StaticFiles、Pool、Collector）
-│   ├── main.py                      # 主站应用 :8000 — API + WebSocket
-│   ├── admin_app.py                 # 后台管理应用 :8010 — 配置 + 监控
-│   ├── pool.py                      # Worker 进程池管理 — 任务分发、恢复、统计
-│   ├── worker.py                    # 子进程入口 — 加载模型、执行模拟、返回结果
-│   ├── store.py                     # 结果存储 — 内存 + 磁盘两级缓存、TTL 过期
-│   ├── collector.py                 # 系统监控采集 — CPU/GPU/内存/磁盘/任务
-│   └── __init__.py
-│
-└── web/                             # 前端页面
-    ├── index.html                   # 主站页面 — Vue 3 + Tailwind CSS + Plotly.js
-    ├── admin.html                   # 后台管理页面 — Vue 3 + Chart.js
-    └── js/
-        ├── app.js                   # 主站逻辑 — 模型选择、参数调节、任务提交、可视化渲染
-        └── admin.js                 # 后台管理逻辑 — Worker 配置、系统监控、图表
+APP/                                 # 软件代码
+├── config.py                        # 模型参数配置
+├── models.py                        # 5 种反应扩散方程 + 拉普拉斯算子
+├── simulation.py                    # 模拟引擎 — 网格初始化、迭代、内存管理
+├── visualization.py                 # 可视化数据生成 — Plotly JSON 格式
+├── server.py                        # Flask Web 服务 — API + 页面路由
+├── utils.py                         # 环境变量设置
+├── static/
+│   ├── css/style.css                # 深色科技风主题样式
+│   └── js/app.js                    # 前端逻辑 — Plotly.js 图表渲染
+└── templates/
+    └── index.html                   # 主页面
 
-start.py                             # 一键启动脚本
-Pattern-Generator.spec               # PyInstaller 打包规格
-requirements.txt                     # Python 依赖清单
+run.py                               # 启动脚本
+requirements.txt                     # Python 依赖
 CHANGELOG.md                         # 更新日志
+原始代码/                            # 原始 tkinter 版本存档
 ```
 
 ## 讨论与交流

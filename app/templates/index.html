@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>斑图形成可视化系统</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Exo:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <!-- 样式 -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- 主容器 -->
+    <div class="app-container">
+        <!-- ===== 左侧控制面板 ===== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1 class="app-title">斑图形成可视化系统</h1>
+                <span class="hardware-badge" id="hardware-badge">加载中...</span>
+            </div>
+
+            <div class="sidebar-scroll">
+                <!-- 模型选择 -->
+                <section class="panel-card">
+                    <h3 class="card-title">模型选择</h3>
+                    <select id="model-select" class="select-input">
+                        <option value="模型1">模型1·R-M型</option>
+                        <option value="模型2">模型2·Holling II型</option>
+                        <option value="模型3">模型3·比值依赖型</option>
+                        <option value="模型4">模型4·对称竞争</option>
+                        <option value="模型5">模型5·连续化离散型</option>
+                    </select>
+                </section>
+
+                <!-- 参数设置 -->
+                <section class="panel-card">
+                    <h3 class="card-title">参数设置</h3>
+                    <div id="params-container"></div>
+                    <button class="btn btn-outline" id="reset-params">重置参数</button>
+                </section>
+
+                <!-- 初始值范围 -->
+                <section class="panel-card">
+                    <h3 class="card-title">初始值范围</h3>
+                    <p class="init-desc" id="init-desc"></p>
+                    <div class="init-grid">
+                        <label>X 最小值</label>
+                        <input type="number" id="x-min" step="0.01" class="num-input">
+                        <label>X 最大值</label>
+                        <input type="number" id="x-max" step="0.01" class="num-input">
+                        <label>Y 最小值</label>
+                        <input type="number" id="y-min" step="0.01" class="num-input">
+                        <label>Y 最大值</label>
+                        <input type="number" id="y-max" step="0.01" class="num-input">
+                    </div>
+                    <button class="btn btn-outline" id="apply-best-init">应用最佳初始值</button>
+                </section>
+
+                <!-- 跟踪点设置 -->
+                <section class="panel-card">
+                    <h3 class="card-title">时间演化跟踪点</h3>
+                    <div class="track-inputs">
+                        <label>X坐标</label>
+                        <input type="number" id="track-x" value="50" min="0" max="99" class="num-input">
+                        <label>Y坐标</label>
+                        <input type="number" id="track-y" value="50" min="0" max="99" class="num-input">
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn btn-success" id="add-track">添加</button>
+                        <button class="btn btn-warning" id="clear-track">清空</button>
+                    </div>
+                    <div class="track-list" id="track-list">当前跟踪点: 中心点(50,50)</div>
+                </section>
+
+                <!-- 迭代次数 -->
+                <section class="panel-card">
+                    <h3 class="card-title">迭代次数</h3>
+                    <div class="range-container">
+                        <input type="range" id="iter-range" min="100" max="20000" value="9000" class="range-input">
+                        <input type="number" id="iter-value" value="9000" class="num-input num-inline">
+                    </div>
+                    <button class="btn btn-outline" id="reset-iters">重置推荐值</button>
+                </section>
+
+                <!-- 动画设置 -->
+                <section class="panel-card">
+                    <h3 class="card-title">动画设置</h3>
+                    <div class="init-grid">
+                        <label>起始迭代</label>
+                        <input type="number" id="anim-start" value="0" min="0" class="num-input">
+                        <label>结束迭代</label>
+                        <input type="number" id="anim-end" value="300" min="1" max="20000" class="num-input">
+                        <label>帧数</label>
+                        <input type="number" id="anim-frames" value="300" min="1" max="1000" class="num-input">
+                    </div>
+                </section>
+
+                <!-- 控制面板 -->
+                <section class="panel-card control-section">
+                    <h3 class="card-title">控制面板</h3>
+                    <button class="btn btn-primary" id="run-sim">
+                        运行模拟
+                    </button>
+                    <button class="btn btn-accent" id="run-anim">
+                        开始动画
+                    </button>
+                    <button class="btn btn-outline" id="reset-all">
+                        重置所有
+                    </button>
+                    <button class="btn btn-outline" id="clean-cache">
+                        清理缓存
+                    </button>
+                    <div class="status-text" id="status-msg">就绪，请选择参数运行模拟</div>
+                </section>
+            </div>
+        </aside>
+
+        <!-- ===== 右侧可视化区域 ===== -->
+        <main class="main-content">
+            <!-- 标签导航 -->
+            <nav class="tab-nav">
+                <button class="tab-btn active" data-tab="tab-2d">二维斑图</button>
+                <button class="tab-btn" data-tab="tab-3d">三维斑图</button>
+                <button class="tab-btn" data-tab="tab-anim">动画演示</button>
+            </nav>
+
+            <!-- 二维斑图面板 -->
+            <div class="tab-panel active" id="tab-2d">
+                <div class="viz-grid-2d">
+                    <div class="chart-box" id="chart-x-pop"></div>
+                    <div class="chart-box" id="chart-y-pop"></div>
+                    <div class="chart-box" id="chart-combined"></div>
+                </div>
+                <div class="chart-box chart-full" id="chart-evolution"></div>
+            </div>
+
+            <!-- 三维斑图面板 -->
+            <div class="tab-panel" id="tab-3d">
+                <div class="chart-box chart-full chart-3d" id="chart-3d"></div>
+            </div>
+
+            <!-- 动画面板 -->
+            <div class="tab-panel" id="tab-anim">
+                <div class="anim-control-bar">
+                    <button class="btn btn-primary" id="anim-play">▶ 播放</button>
+                    <button class="btn btn-outline" id="anim-pause">暂停</button>
+                    <span class="anim-frame-info" id="anim-frame-info">帧: 0 / 0</span>
+                    <input type="range" id="anim-slider" min="0" max="100" value="0" class="anim-slider">
+                    <span class="anim-speed-label">速度:</span>
+                    <input type="number" id="anim-speed" value="200" min="50" max="1000" step="50" class="num-input num-xs">
+                    <span>ms</span>
+                </div>
+                <div class="viz-grid-2d">
+                    <div class="chart-box" id="chart-anim-x"></div>
+                    <div class="chart-box" id="chart-anim-y"></div>
+                    <div class="chart-box" id="chart-anim-combined"></div>
+                </div>
+                <div class="chart-box chart-full" id="chart-anim-evo"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast提示 -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- 加载遮罩 -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p id="loading-text">计算中...</p>
+    </div>
+
+    <!-- 脚本 -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
