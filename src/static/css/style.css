@@ -2,6 +2,39 @@
    斑图形成可视化系统 - 现代化深色科技主题
    ============================================================ */
 
+/* === 本地字体：思源黑体可变字体（Noto Sans CJK VF）
+   一个文件包含简/繁/港/日/韩全语言变体 + 全字重(100~900) === */
+@font-face {
+    font-family: 'Noto Sans CJK SC';
+    src: url('/static/fonts/NotoSansCJK-VF.otf.ttc') format('truetype');
+    font-weight: 100 900;
+    font-display: block;
+}
+@font-face {
+    font-family: 'Noto Sans CJK TC';
+    src: url('/static/fonts/NotoSansCJK-VF.otf.ttc') format('truetype');
+    font-weight: 100 900;
+    font-display: block;
+}
+@font-face {
+    font-family: 'Noto Sans CJK HK';
+    src: url('/static/fonts/NotoSansCJK-VF.otf.ttc') format('truetype');
+    font-weight: 100 900;
+    font-display: block;
+}
+@font-face {
+    font-family: 'Noto Sans CJK JP';
+    src: url('/static/fonts/NotoSansCJK-VF.otf.ttc') format('truetype');
+    font-weight: 100 900;
+    font-display: block;
+}
+@font-face {
+    font-family: 'Noto Sans CJK KR';
+    src: url('/static/fonts/NotoSansCJK-VF.otf.ttc') format('truetype');
+    font-weight: 100 900;
+    font-display: block;
+}
+
 /* === CSS变量 === */
 :root {
     --color-bg: #0a0e14;
@@ -24,9 +57,11 @@
     --color-danger: #e74c3c;
     --color-info: #1abc9c;
 
-    --font-heading: 'Exo', 'Noto Sans SC', sans-serif;
-    --font-body: 'Noto Sans SC', 'Roboto Mono', monospace;
-    --font-mono: 'Roboto Mono', monospace;
+    /* 思源黑体全语言变体，默认简体优先 */
+    --font-cjk: 'Noto Sans CJK SC', 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK JP', 'Noto Sans CJK KR';
+    --font-heading: var(--font-cjk), sans-serif;
+    --font-body: var(--font-cjk), sans-serif;
+    --font-mono: var(--font-cjk), monospace;
 
     --radius-sm: 6px;
     --radius-md: 10px;
@@ -41,6 +76,17 @@
     --sidebar-width: 400px;
     --transition-fast: 150ms ease;
     --transition-normal: 250ms ease;
+}
+
+/* === 系统语言适配：繁体系统优先用TC字形；非中文系统用Times New Roman === */
+:root[lang^="zh-TW"], :root[lang^="zh-HK"] {
+    --font-cjk: 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK SC', 'Noto Sans CJK JP', 'Noto Sans CJK KR';
+}
+:root[lang^="en"] {
+    --font-cjk: 'Times New Roman', 'Noto Sans CJK SC', 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK JP', 'Noto Sans CJK KR';
+    --font-heading: 'Times New Roman', 'Noto Sans CJK SC', serif;
+    --font-body: 'Times New Roman', 'Noto Sans CJK SC', serif;
+    --font-mono: 'Times New Roman', 'Noto Sans CJK SC', serif;
 }
 
 /* === 隐藏数字输入框的加减箭头 === */

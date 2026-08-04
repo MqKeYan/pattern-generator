@@ -15,6 +15,10 @@ const state = {
     animFrame: 0,         // 当前动画帧
     animPlaying: false,   // 动画播放状态
     clientId: '',         // 客户端ID
+    lastViz3d: null,       // 最近一次三维图数据（懒渲染用）
+    rendered3d: false,     // 三维图是否已渲染
+    render3dToken: 0,      // 三维图渲染序号，避免旧绘制完成后覆盖新状态
+    zMaxLocked: null,      // z轴最大值锁定值（首次渲染后固定）
 };
 
 // DOM元素缓存
@@ -127,6 +131,7 @@ function setStatus(msg, type = '') {
  */
 async function apiCall(url, data) {
     data.client_id = state.clientId;
+    data.lang = i18n.lang;  // 传语言给后端，用于图表标题翻译
     const resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -145,8 +150,9 @@ async function init() {
     state.clientId = getClientId();
 
     try {
-        const resp = await fetch('/api/config');
-        const config = await resp.json();
+        // 同步读取服务端内联配置，刷新首帧即渲染完整侧边栏
+        const config = window.INIT_CONFIG;
+        if (!config) throw new Error('INIT_CONFIG 缺失');
 
         state.modelConfigs = config.models;
         state.initRanges = config.init_ranges;
@@ -156,10 +162,10 @@ async function init() {
         // 硬件信息
         $('#hardware-badge').textContent = ' ' + config.hardware_info;
 
-        // 构建模型选择器
+        // 构建模型选择器（模型名按语言翻译）
         const select = $('#model-select');
         select.innerHTML = Object.keys(config.models).map(m =>
-            `<option value="${m}">${state.modelDisplayNames[m] || m}</option>`
+            `<option value="${m}">${i18n.t('model_' + m.replace('模型', ''))}</option>`
         ).join('');
 
         // 恢复本地设置
@@ -193,15 +199,19 @@ async function init() {
             }
         }
 
-        // 尝试恢复服务端缓存的图表
+        // 字体加载完成后再恢复图表，避免字体切换导致页面布局二次变化
+        const fontsReady = document.fonts?.ready || Promise.resolve();
         const cachedResp = await apiCall('/api/restore', {});
+        await fontsReady;
         if (cachedResp.success && cachedResp.cached) {
             const cache = cachedResp.cached;
             if (cache.type === 'simulation' && cache.viz_2d) {
                 render2DPatterns(cache.viz_2d);
-                if (cache.viz_3d) render3DPattern(cache.viz_3d);
-                setStatus('已恢复上次模拟结果', 'success');
-                showToast('已恢复上次结果，刷新无忧');
+                // 三维图懒渲染：恢复时默认在二维标签，等切换到三维标签时再渲染
+                state.lastViz3d = cache.viz_3d || null;
+                state.rendered3d = false;
+                setStatus(i18n.t('restored_sim'), 'success');
+                showToast(i18n.t('restored_toast'));
             }
             if (cache.anim && cache.anim.animation) {
                 state.animationData = cache.anim.animation;
@@ -216,11 +226,25 @@ async function init() {
                 renderAnimEvolution();
             }
         } else {
-            setStatus('就绪，请选择参数运行模拟');
+            setStatus(i18n.t('status_ready'));
         }
+
+        // 恢复刷新前的标签页位置（三维标签会触发懒渲染）
+        restoreTab();
     } catch (err) {
         console.error('初始化失败:', err);
-        setStatus('初始化失败', 'error');
+        setStatus(i18n.t('init_failed'), 'error');
+    }
+}
+
+/**
+ * 恢复刷新前的标签页位置
+ * 从sessionStorage读取保存的标签并激活，刷新网页不回主页
+ */
+function restoreTab() {
+    const saved = sessionStorage.getItem('active_tab');
+    if (saved && document.getElementById(saved)) {
+        switchTab(saved);
     }
 }
 
@@ -331,11 +355,11 @@ function addTrackPoint() {
     const x = parseInt($('#track-x').value);
     const y = parseInt($('#track-y').value);
     if (isNaN(x) || isNaN(y) || x < 0 || x > 99 || y < 0 || y > 99) {
-        showToast('坐标必须在0~99之间', 'error');
+        showToast(i18n.t('point_range_error'), 'error');
         return;
     }
     if (state.trackPoints.some(p => p.x === x && p.y === y)) {
-        showToast(`点(${x},${y})已存在`, 'info');
+        showToast(i18n.t('point_exists', { x, y }), 'info');
         return;
     }
     state.trackPoints.push({ x, y });
@@ -356,10 +380,10 @@ function clearTrackPoints() {
 function updateTrackList() {
     const el = $('#track-list');
     if (state.trackPoints.length === 0) {
-        el.textContent = '当前跟踪点: 中心点(50,50)';
+        el.textContent = i18n.t('track_list_center');
     } else {
-        const pts = state.trackPoints.map(p => `点(${p.x},${p.y})`).join(', ');
-        el.textContent = `当前跟踪点: 中心点(50,50), ${pts}`;
+        const pts = state.trackPoints.map(p => `(${p.x},${p.y})`).join(', ');
+        el.textContent = i18n.t('track_list_custom', { pts });
     }
 }
 
@@ -373,8 +397,8 @@ async function runSimulation() {
         switchTab('tab-2d');
     }
 
-    showLoading('模拟计算中，请稍候...');
-    setStatus(' 模拟进行中...', 'info');
+    showLoading(i18n.t('simulating'));
+    setStatus(i18n.t('simulating_status'), 'info');
 
     try {
         const params = getParams();
@@ -395,15 +419,20 @@ async function runSimulation() {
 
         // 渲染二维斑图
         render2DPatterns(resp.viz_2d);
-        // 渲染三维斑图
-        render3DPattern(resp.viz_3d);
+        // 三维斑图懒渲染：仅当三维标签可见时立即渲染，否则等切换时再渲染
+        state.lastViz3d = resp.viz_3d;
+        if ($('.tab-btn.active')?.dataset?.tab === 'tab-3d') {
+            render3DPattern(resp.viz_3d);
+        } else {
+            state.rendered3d = false;
+        }
 
-        setStatus(` 模拟完成 — ${resp.model}，迭代${resp.iterations}次`, 'success');
-        showToast('模拟完成！', 'success');
+        setStatus(i18n.t('sim_complete', { model: resp.model, iters: resp.iterations }), 'success');
+        showToast(i18n.t('sim_done'), 'success');
     } catch (err) {
         console.error('模拟失败:', err);
-        setStatus(' 模拟失败: ' + err.message, 'error');
-        showToast('模拟失败: ' + err.message, 'error');
+        setStatus(i18n.t('sim_failed', { msg: err.message }), 'error');
+        showToast(i18n.t('sim_failed', { msg: err.message }), 'error');
     } finally {
         hideLoading();
     }
@@ -425,15 +454,15 @@ function render2DPatterns(vizData) {
         z: xPop.data,
         type: 'heatmap',
         colorscale: 'Viridis',
-        colorbar: { title: '密度', len: 0.8 },
+        colorbar: { title: i18n.t('density'), len: 0.8 },
     }], {
         title: { text: xPop.title, font: { size: 14, color: '#e0e4ec' } },
         paper_bgcolor: '#0a0e14',
         plot_bgcolor: '#0a0e14',
         font: { color: '#b0bed0', size: 11 },
         margin: { l: 50, r: 30, t: 40, b: 40 },
-        xaxis: { title: 'X轴', scaleanchor: 'y' },
-        yaxis: { title: 'Y轴' },
+        xaxis: { title: i18n.t('axis_x'), scaleanchor: 'y' },
+        yaxis: { title: i18n.t('axis_y') },
     }, { responsive: true, displayModeBar: false });
 
     // Y种群热力图
@@ -441,15 +470,15 @@ function render2DPatterns(vizData) {
         z: yPop.data,
         type: 'heatmap',
         colorscale: 'Plasma',
-        colorbar: { title: '密度', len: 0.8 },
+        colorbar: { title: i18n.t('density'), len: 0.8 },
     }], {
         title: { text: yPop.title, font: { size: 14, color: '#e0e4ec' } },
         paper_bgcolor: '#0a0e14',
         plot_bgcolor: '#0a0e14',
         font: { color: '#b0bed0', size: 11 },
         margin: { l: 50, r: 30, t: 40, b: 40 },
-        xaxis: { title: 'X轴', scaleanchor: 'y' },
-        yaxis: { title: 'Y轴' },
+        xaxis: { title: i18n.t('axis_x'), scaleanchor: 'y' },
+        yaxis: { title: i18n.t('axis_y') },
     }, { responsive: true, displayModeBar: false });
 
     // 合并斑图
@@ -466,15 +495,15 @@ function render2DPatterns(vizData) {
             [0.75, 'rgb(0,180,0)'],
             [1, 'rgb(0,200,200)'],
         ],
-        colorbar: { title: '密度', len: 0.8 },
+        colorbar: { title: i18n.t('density'), len: 0.8 },
     }], {
         title: { text: combined.title, font: { size: 14, color: '#e0e4ec' } },
         paper_bgcolor: '#0a0e14',
         plot_bgcolor: '#0a0e14',
         font: { color: '#b0bed0', size: 11 },
         margin: { l: 50, r: 30, t: 40, b: 40 },
-        xaxis: { title: 'X轴', scaleanchor: 'y' },
-        yaxis: { title: 'Y轴' },
+        xaxis: { title: i18n.t('axis_x'), scaleanchor: 'y' },
+        yaxis: { title: i18n.t('axis_y') },
     }, { responsive: true, displayModeBar: false });
 
     // 跟踪点标记（在合并图上）
@@ -508,11 +537,26 @@ function render2DPatterns(vizData) {
         plot_bgcolor: '#1a1f2b',
         font: { color: '#b0bed0', size: 11 },
         margin: { l: 60, r: 30, t: 40, b: 50 },
-        xaxis: { title: '迭代次数', gridcolor: '#3a4558', zeroline: false },
-        yaxis: { title: '种群密度', gridcolor: '#3a4558', zeroline: false },
+        xaxis: { title: i18n.t('iterations_axis'), gridcolor: '#3a4558', zeroline: false },
+        yaxis: { title: i18n.t('density_axis'), gridcolor: '#3a4558', zeroline: false },
         legend: { font: { size: 9 }, bgcolor: '#131820', bordercolor: '#3a4558' },
         hovermode: 'closest',
     }, { responsive: true, displayModeBar: false });
+}
+
+/**
+ * 立即结束Plotly底层相机的平滑过渡
+ * @param {HTMLElement} chart - 三维图容器
+ */
+function settle3DCamera(chart) {
+    const scene = chart._fullLayout?.scene?._scene;
+    const view = scene?.camera?.view;
+    if (!view) return;
+
+    const time = view.lastT();
+    view.flush(time);
+    view.recalcMatrix(time);
+    scene.glplot?.redraw?.();
 }
 
 /**
@@ -520,46 +564,120 @@ function render2DPatterns(vizData) {
  * @param {Object} vizData - 可视化数据
  */
 function render3DPattern(vizData) {
-    Plotly.newPlot('chart-3d', [{
-        z: vizData.z,
+    const chart = $('#chart-3d');
+    const renderToken = ++state.render3dToken;
+    const zArr = vizData.z;
+    const zMin = Math.min(...zArr.map(r => Math.min(...r)));
+    const zMax = Math.max(...zArr.map(r => Math.max(...r)));
+    const xEnd = zArr.length - 1;
+    const yEnd = zArr[0].length - 1;
+
+    // Z数据归一化到0-100，三轴等物理长度，轴固定不漂移
+    const zRange = (zMax - zMin) || 0.001;
+    const zScaled = zArr.map(row => row.map(v => (v - zMin) / zRange * 100));
+    // Z轴刻度，起点不标避免与XY轴原点重叠
+    const zTickVals = [20, 40, 60, 80, 100];
+    const zTickText = zTickVals.map(v => (v / 100 * zRange + zMin).toFixed(5));
+    // 颜色条刻度覆盖全范围，映射真实值
+    const cbarTickVals = [0, 20, 40, 60, 80, 100];
+    const cbarTickText = cbarTickVals.map(v => (v / 100 * zRange + zMin).toFixed(7));
+
+    const surfaceTrace = {
+        z: zScaled,
         type: 'surface',
         colorscale: 'Viridis',
-        contours: {
-            z: { show: true, usecolormap: true, highlightcolor: 'rgba(255,255,255,0.4)', project: { z: true } },
+        colorbar: {
+            title: { text: i18n.t('density'), font: { size: 13, color: '#b0bed0' } },
+            tickfont: { size: 13, color: '#8895aa' },
+            tickmode: 'array', tickvals: cbarTickVals, ticktext: cbarTickText,
         },
-    }], {
+        contours: {
+            z: { show: false },
+        },
+    };
+    // 隐藏曲面只负责绘制底部投影，避免轮廓线出现在真实曲面的其他高度
+    const projectionTrace = {
+        z: zScaled,
+        type: 'surface',
+        hidesurface: true,
+        showscale: false,
+        colorscale: 'Viridis',
+        hoverinfo: 'skip',
+        contours: {
+            z: {
+                show: true,
+                usecolormap: true,
+                highlightcolor: 'rgba(255,255,255,0.4)',
+                project: { z: true },
+            },
+        },
+    };
+    const trace = [surfaceTrace, projectionTrace];
+    const layout = {
         title: { text: vizData.title, font: { size: 15, color: '#e0e4ec' } },
         paper_bgcolor: '#0a0e14',
         scene: {
             xaxis: {
-                title: { text: 'X轴', standoff: 15, font: { size: 12, color: '#c0cce0' } },
-                gridcolor: '#3a4558',
+                title: { text: i18n.t('axis_x'), standoff: 25, font: { size: 15, color: '#c0cce0' } },
+                showgrid: true, gridcolor: 'rgba(255,255,255,0.12)', gridwidth: 1,
                 color: '#b0bed0',
-                tickfont: { size: 9, color: '#8895aa' },
-                showline: true, linecolor: '#5a6880', linewidth: 1,
-                ticks: 'outside', tickcolor: '#5a6880', ticklen: 4,
+                tickfont: { size: 13, color: '#8895aa' },
+                showline: true, linecolor: '#7a8aa0', linewidth: 3,
+                ticks: 'outside', tickcolor: '#7a8aa0', ticklen: 8,
+                range: [0, 100], tickangle: 0,
+                tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100],
             },
             yaxis: {
-                title: { text: 'Y轴', standoff: 15, font: { size: 12, color: '#c0cce0' } },
-                gridcolor: '#3a4558',
+                title: { text: i18n.t('axis_y'), standoff: 25, font: { size: 15, color: '#c0cce0' } },
+                showgrid: true, gridcolor: 'rgba(255,255,255,0.12)', gridwidth: 1,
                 color: '#b0bed0',
-                tickfont: { size: 9, color: '#8895aa' },
-                showline: true, linecolor: '#5a6880', linewidth: 1,
-                ticks: 'outside', tickcolor: '#5a6880', ticklen: 4,
+                tickfont: { size: 13, color: '#8895aa' },
+                showline: true, linecolor: '#7a8aa0', linewidth: 3,
+                ticks: 'outside', tickcolor: '#7a8aa0', ticklen: 8,
+                range: [0, 100], tickangle: 0,
+                tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100],
             },
             zaxis: {
-                title: { text: '种群密度', standoff: 15, font: { size: 12, color: '#c0cce0' } },
-                gridcolor: '#3a4558',
+                title: { text: i18n.t('density_axis'), standoff: 25, font: { size: 15, color: '#c0cce0' } },
+                showgrid: true, gridcolor: 'rgba(255,255,255,0.12)', gridwidth: 1,
                 color: '#b0bed0',
-                tickfont: { size: 9, color: '#8895aa' },
-                showline: true, linecolor: '#5a6880', linewidth: 1,
-                ticks: 'outside', tickcolor: '#5a6880', ticklen: 4,
+                tickfont: { size: 13, color: '#8895aa' },
+                showline: true, linecolor: '#7a8aa0', linewidth: 3,
+                ticks: 'outside', tickcolor: '#7a8aa0', ticklen: 8,
+                range: [0, 100], tickangle: 0,
+                // 刻度位置在0-100，标签映射回真实数据值
+                tickmode: 'array', tickvals: zTickVals, ticktext: zTickText,
             },
+            // 三轴均0-100，aspectratio 1:1:1等物理长度，轴固定不漂移
+            aspectmode: 'manual',
+            aspectratio: { x: 1, y: 1, z: 1 },
             bgcolor: '#0a0e14',
-            camera: { eye: { x: 1.5, y: 1.5, z: 1.2 } },
+            camera: {
+                eye: { x: 1.5, y: 1.5, z: 1.2 },
+                center: { x: 0, y: 0, z: -0.2 },
+            },
         },
         margin: { l: 0, r: 0, t: 40, b: 0 },
-    }, { responsive: true, displayModeBar: false });
+    };
+    const config = { responsive: true, displayModeBar: false };
+
+    // 等WebGL场景完成绘制后再显示，避免初始化过程中的中间画面抖动
+    chart.style.visibility = 'hidden';
+    // 每次完整重建WebGL场景，避免react复用旧轮廓投影
+    if (chart._fullLayout) Plotly.purge(chart);
+    const plotPromise = Plotly.newPlot(chart, trace, layout, config);
+    Promise.resolve(plotPromise).then(() => {
+        if (renderToken !== state.render3dToken) return;
+        // Plotly绘制完成后相机仍可能处于平滑过渡，必须先固定内部矩阵
+        settle3DCamera(chart);
+        chart.style.visibility = 'visible';
+        state.rendered3d = true;
+    }).catch(err => {
+        if (renderToken !== state.render3dToken) return;
+        chart.style.visibility = 'visible';
+        state.rendered3d = false;
+        console.error('三维图渲染失败:', err);
+    });
 }
 
 /**
@@ -567,7 +685,7 @@ function render3DPattern(vizData) {
  * 生成动画数据并初始化动画界面
  */
 async function runAnimation() {
-    showLoading('准备动画数据...');
+    showLoading(i18n.t('anim_preparing'));
 
     try {
         const params = getParams();
@@ -597,7 +715,7 @@ async function runAnimation() {
         // 设置滑块
         $('#anim-slider').max = resp.animation.total_frames - 1;
         $('#anim-slider').value = 0;
-        $('#anim-frame-info').textContent = `帧: 0 / ${resp.animation.total_frames}`;
+        $('#anim-frame-info').textContent = i18n.t('frame_count', { current: 0, total: resp.animation.total_frames });
 
         // 渲染第一帧
         renderAnimFrame(0);
@@ -606,13 +724,13 @@ async function runAnimation() {
         renderAnimEvolution();
 
         hideLoading();
-        showToast('动画数据准备完成', 'success');
-        setStatus('动画数据就绪，点击播放', 'success');
+        showToast(i18n.t('anim_ready'), 'success');
+        setStatus(i18n.t('anim_ready_status'), 'success');
     } catch (err) {
         console.error('动画准备失败:', err);
         hideLoading();
-        showToast('动画准备失败: ' + err.message, 'error');
-        setStatus('动画准备失败', 'error');
+        showToast(i18n.t('anim_failed', { msg: err.message }), 'error');
+        setStatus(i18n.t('anim_failed_status'), 'error');
     }
 }
 
@@ -633,7 +751,7 @@ function renderAnimFrame(frameIdx) {
         colorscale: 'Viridis',
         colorbar: { title: '', len: 0.7, thickness: 15, x: 1.02, showticklabels: false },
     }], {
-        title: { text: `X种群 - 迭代 ${iterNum}`, font: { size: 13, color: '#e0e4ec' } },
+        title: { text: i18n.t('anim_title_x', { iter: iterNum }), font: { size: 13, color: '#e0e4ec' } },
         paper_bgcolor: '#0a0e14',
         plot_bgcolor: '#0a0e14',
         font: { color: '#b0bed0', size: 10 },
@@ -649,7 +767,7 @@ function renderAnimFrame(frameIdx) {
         colorscale: 'Plasma',
         colorbar: { title: '', len: 0.7, thickness: 15, x: 1.02, showticklabels: false },
     }], {
-        title: { text: `Y种群 - 迭代 ${iterNum}`, font: { size: 13, color: '#e0e4ec' } },
+        title: { text: i18n.t('anim_title_y', { iter: iterNum }), font: { size: 13, color: '#e0e4ec' } },
         paper_bgcolor: '#0a0e14',
         plot_bgcolor: '#0a0e14',
         font: { color: '#b0bed0', size: 10 },
@@ -681,7 +799,7 @@ function renderAnimFrame(frameIdx) {
         ],
         colorbar: { title: '', len: 0.7, thickness: 15, x: 1.02, showticklabels: false },
     }], {
-        title: { text: `合并斑图 - 迭代 ${iterNum}`, font: { size: 13, color: '#e0e4ec' } },
+        title: { text: i18n.t('anim_title_combined', { iter: iterNum }), font: { size: 13, color: '#e0e4ec' } },
         paper_bgcolor: '#0a0e14',
         plot_bgcolor: '#0a0e14',
         font: { color: '#b0bed0', size: 10 },
@@ -691,7 +809,7 @@ function renderAnimFrame(frameIdx) {
     }, { responsive: false, displayModeBar: false });
 
     $('#anim-slider').value = frameIdx;
-    $('#anim-frame-info').textContent = `帧: ${frameIdx} / ${displayFrames}`;
+    $('#anim-frame-info').textContent = i18n.t('frame_count', { current: frameIdx, total: displayFrames });
 }
 
 /**
@@ -706,23 +824,23 @@ function renderAnimEvolution() {
     const adjustedTime = cs.time.map(t => t + actualStartTime);
 
     Plotly.react('chart-anim-evo', [
-        { x: adjustedTime, y: cs.x, type: 'scatter', mode: 'lines', name: 'X种群-中心点',
+        { x: adjustedTime, y: cs.x, type: 'scatter', mode: 'lines', name: i18n.t('center_x'),
           line: { color: '#3498DB', width: 2 } },
-        { x: adjustedTime, y: cs.y, type: 'scatter', mode: 'lines', name: 'Y种群-中心点',
+        { x: adjustedTime, y: cs.y, type: 'scatter', mode: 'lines', name: i18n.t('center_y'),
           line: { color: '#E74C3C', width: 2 } },
     ], {
-        title: { text: '中心点时间演化', font: { size: 13, color: '#e0e4ec' } },
+        title: { text: i18n.t('center_evo_title'), font: { size: 13, color: '#e0e4ec' } },
         paper_bgcolor: '#0a0e14',
         plot_bgcolor: '#1a1f2b',
         font: { color: '#b0bed0', size: 10 },
         margin: { l: 50, r: 20, t: 35, b: 40 },
         xaxis: {
-            title: '迭代次数',
+            title: i18n.t('iterations_axis'),
             gridcolor: '#3a4558',
             // 设置x轴范围，显示从起始迭代到结束迭代的完整范围
             range: [actualStartTime, actualStartTime + cs.time.length - 1]
         },
-        yaxis: { title: '种群密度', gridcolor: '#3a4558' },
+        yaxis: { title: i18n.t('density_axis'), gridcolor: '#3a4558' },
         legend: { font: { size: 9 }, bgcolor: '#131820', bordercolor: '#3a4558' },
     }, { responsive: true, displayModeBar: false });
 }
@@ -732,7 +850,7 @@ function renderAnimEvolution() {
  */
 function playAnimation() {
     if (!state.animationData) {
-        showToast('请先运行动画计算', 'error');
+        showToast(i18n.t('need_anim'), 'error');
         return;
     }
     if (state.animPlaying) return;
@@ -769,6 +887,9 @@ function pauseAnimation() {
  * @param {string} tabId - 标签页ID
  */
 function switchTab(tabId) {
+    // 记录当前标签，刷新后保持原位置
+    sessionStorage.setItem('active_tab', tabId);
+
     $$('.tab-btn').forEach(b => b.classList.remove('active'));
     $$('.tab-panel').forEach(p => p.classList.remove('active'));
 
@@ -777,11 +898,18 @@ function switchTab(tabId) {
     if (btn) btn.classList.add('active');
     if (panel) panel.classList.add('active');
 
-    // 切换后触发所有图表resize
+    // 三维标签首次可见时懒渲染（容器尺寸正确，避免左上角放大过渡）
+    if (tabId === 'tab-3d' && state.lastViz3d && !state.rendered3d) {
+        render3DPattern(state.lastViz3d);
+    }
+
+    // 切换后触发所有图表resize（三维图除外：WebGL自动适配，resize反而引起画布重建闪烁）
     setTimeout(() => {
         const panel = document.getElementById(tabId);
         if (panel) {
-            panel.querySelectorAll('.chart-box').forEach(el => Plotly.Plots.resize(el));
+            panel.querySelectorAll('.chart-box').forEach(el => {
+                if (el.id !== 'chart-3d') Plotly.Plots.resize(el);
+            });
         }
     }, 100);
 }
@@ -869,14 +997,14 @@ function bindEvents() {
         state.trackPoints = [];
         updateTrackList();
         saveSettings();
-        showToast('所有设置已重置');
+        showToast(i18n.t('reset_done'));
     });
     $('#clean-cache').addEventListener('click', async () => {
         try {
             const resp = await apiCall('/api/cleanup', {});
             showToast(resp.message, 'success');
         } catch (err) {
-            showToast('清理失败: ' + err.message, 'error');
+            showToast(i18n.t('clean_failed', { msg: err.message }), 'error');
         }
     });
 
@@ -931,6 +1059,7 @@ function bindEvents() {
             else playAnimation();
         }
     });
+
 }
 
 /**

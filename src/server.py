@@ -6,7 +6,12 @@ import gc
 import time
 import traceback
 import logging
+import mimetypes
 from threading import Lock
+
+# 注册字体MIME类型，确保浏览器正确加载本地字体
+mimetypes.add_type('font/collection', '.ttc')
+mimetypes.add_type('font/otf', '.otf')
 
 # 配置日志：输出到stderr（无缓冲），实时显示
 logging.basicConfig(
@@ -62,32 +67,17 @@ compute_lock = Lock()
 
 @app.route('/')
 def index():
-    """主页面"""
-    return render_template('index.html')
-
-@app.route('/api/config')
-def get_config():
-    """获取所有配置信息"""
-    config_data = {}
-    for model_name, config in MODEL_CONFIGS.items():
-        config_data[model_name] = {
-            'params': config['params'],
-            'defaults': config['defaults'],
-            'recommended_iterations': config['recommended_iterations'],
-            'description': config['description'],
-            'min_iterations': config.get('min_iterations', 100),
-            'max_iterations': config.get('max_iterations', 20000),
-        }
-
-    return jsonify({
+    """主页面，配置内联到HTML，刷新首帧即完整渲染侧边栏"""
+    init_config = {
         'version': VERSION,
-        'models': config_data,
+        'models': MODEL_CONFIGS,
         'init_ranges': MODEL_INIT_RANGES,
         'param_names': PARAM_NAMES,
         'display_names': MODEL_DISPLAY_NAMES,
         'grid_size': GRID_SIZE,
         'hardware_info': simulator.hardware_info,
-    })
+    }
+    return render_template('index.html', init_config=init_config)
 
 @app.route('/api/simulate', methods=['POST'])
 def run_simulation():
@@ -134,11 +124,12 @@ def run_simulation():
             if data.get('auto_clean', True):
                 simulator.clear_memory()
 
-        # 生成可视化数据（CPU操作，无需锁）
+        # 生成可视化数据（CPU操作，无需锁），按语言翻译图表标题
+        lang = data.get('lang', 'zh-CN')
         viz_data = visualizer.create_comprehensive_plot(
-            x_data, y_data, evolution_data, track_points, model_name
+            x_data, y_data, evolution_data, track_points, model_name, lang=lang
         )
-        viz_3d = visualizer.create_3d_pattern(x_data, model_name)
+        viz_3d = visualizer.create_3d_pattern(x_data, model_name, lang=lang)
 
         # 日志：模拟完成
         elapsed = time.time() - t0
@@ -263,10 +254,3 @@ def restore():
             'cached': client_cache[client_id],
         })
     return jsonify({'success': False, 'cached': None})
-
-if __name__ == '__main__':
-    from waitress import serve
-    print("斑图形成可视化系统 - Web服务器启动")
-    print(f"访问地址: http://localhost:5000")
-    print(f"局域网地址: http://0.0.0.0:5000")
-    serve(app, host='0.0.0.0', port=5000)
