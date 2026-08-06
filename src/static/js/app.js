@@ -15,6 +15,8 @@ const state = {
     animFrame: 0,         // 当前动画帧
     animPlaying: false,   // 动画播放状态
     clientId: '',         // 客户端ID
+    lastViz2d: null,       // 最近一次二维斑图数据
+    animationRestorePromise: null, // 动画缓存恢复请求
     lastViz3d: null,       // 最近一次三维图数据（懒渲染用）
     rendered3d: false,     // 三维图是否已渲染
     render3dToken: 0,      // 三维图渲染序号，避免旧绘制完成后覆盖新状态
@@ -24,6 +26,31 @@ const state = {
 // DOM元素缓存
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
+
+function getPlotTheme() {
+    const styles = getComputedStyle(document.documentElement);
+    const color = name => styles.getPropertyValue(name).trim();
+    const plotText = color('--color-plot-text') || '#ffffff';
+    return {
+        text: plotText,
+        secondary: plotText,
+        muted: plotText,
+        grid: color('--color-plot-grid') || 'rgba(164, 190, 232, 0.12)',
+        axis: color('--color-plot-axis') || '#7a8aa0',
+        border: color('--color-border') || 'rgba(164, 190, 232, 0.2)',
+    };
+}
+
+/**
+ * 动画图表首次创建，后续帧更新，避免空容器执行无效react比较。
+ */
+function renderAnimationPlot(id, data, layout, config) {
+    const chart = document.getElementById(id);
+    if (chart?._fullLayout) {
+        return Plotly.react(chart, data, layout, config);
+    }
+    return Plotly.newPlot(chart, data, layout, config);
+}
 
 /**
  * 获取客户端ID
@@ -201,29 +228,19 @@ async function init() {
 
         // 字体加载完成后再恢复图表，避免字体切换导致页面布局二次变化
         const fontsReady = document.fonts?.ready || Promise.resolve();
-        const cachedResp = await apiCall('/api/restore', {});
+        const activeTab = sessionStorage.getItem('active_tab') || 'tab-2d';
+        const cachedResp = await apiCall('/api/restore', { include_animation: false });
         await fontsReady;
         if (cachedResp.success && cachedResp.cached) {
             const cache = cachedResp.cached;
             if (cache.type === 'simulation' && cache.viz_2d) {
-                render2DPatterns(cache.viz_2d);
+                state.lastViz2d = cache.viz_2d;
+                if (activeTab === 'tab-2d') render2DPatterns(cache.viz_2d);
                 // 三维图懒渲染：恢复时默认在二维标签，等切换到三维标签时再渲染
                 state.lastViz3d = cache.viz_3d || null;
                 state.rendered3d = false;
                 setStatus(i18n.t('restored_sim'), 'success');
                 showToast(i18n.t('restored_toast'));
-            }
-            if (cache.anim && cache.anim.animation) {
-                state.animationData = cache.anim.animation;
-                state.animStart = parseInt($('#anim-start').value) || 0;
-                state.animEnd = parseInt($('#anim-end').value) || cache.anim.animation.total_frames;
-                state.animFrame = 0;
-                state.animPlaying = false;
-                $('#anim-slider').max = cache.anim.animation.total_frames - 1;
-                $('#anim-slider').value = 0;
-                $('#anim-frame-info').textContent = `帧: 0 / ${cache.anim.animation.total_frames}`;
-                renderAnimFrame(0);
-                renderAnimEvolution();
             }
         } else {
             setStatus(i18n.t('status_ready'));
@@ -246,6 +263,38 @@ function restoreTab() {
     if (saved && document.getElementById(saved)) {
         switchTab(saved);
     }
+}
+
+/**
+ * 按需恢复动画缓存，避免二维页面刷新时解析全部动画帧。
+ */
+async function restoreAnimationCache() {
+    if (state.animationData) return;
+    if (state.animationRestorePromise) return state.animationRestorePromise;
+
+    state.animationRestorePromise = apiCall('/api/restore', { include_animation: true })
+        .then(resp => {
+            const animation = resp.cached?.anim?.animation;
+            if (!animation) return;
+
+            state.animationData = animation;
+            state.animStart = parseInt($('#anim-start').value) || 0;
+            state.animEnd = parseInt($('#anim-end').value) || animation.total_frames;
+            state.animFrame = 0;
+            state.animPlaying = false;
+            $('#anim-slider').max = animation.total_frames - 1;
+            $('#anim-slider').value = 0;
+            $('#anim-frame-info').textContent = `帧: 0 / ${animation.total_frames}`;
+
+            if ($('.tab-btn.active')?.dataset?.tab === 'tab-anim') {
+                renderAnimFrame(0);
+                renderAnimEvolution();
+            }
+        })
+        .catch(err => console.error('恢复动画缓存失败:', err))
+        .finally(() => { state.animationRestorePromise = null; });
+
+    return state.animationRestorePromise;
 }
 
 /**
@@ -418,6 +467,7 @@ async function runSimulation() {
         });
 
         // 渲染二维斑图
+        state.lastViz2d = resp.viz_2d;
         render2DPatterns(resp.viz_2d);
         // 三维斑图懒渲染：仅当三维标签可见时立即渲染，否则等切换时再渲染
         state.lastViz3d = resp.viz_3d;
@@ -444,6 +494,7 @@ async function runSimulation() {
  * @param {Object} vizData - 可视化数据
  */
 function render2DPatterns(vizData) {
+    const colors = getPlotTheme();
     const xPop = vizData['2d_patterns'].x_population;
     const yPop = vizData['2d_patterns'].y_population;
     const combined = vizData.combined_pattern;
@@ -456,13 +507,13 @@ function render2DPatterns(vizData) {
         colorscale: 'Viridis',
         colorbar: { title: i18n.t('density'), len: 0.8 },
     }], {
-        title: { text: xPop.title, font: { size: 14, color: '#e0e4ec' } },
-        paper_bgcolor: '#0a0e14',
-        plot_bgcolor: '#0a0e14',
-        font: { color: '#b0bed0', size: 11 },
-        margin: { l: 50, r: 30, t: 40, b: 40 },
-        xaxis: { title: i18n.t('axis_x'), scaleanchor: 'y' },
-        yaxis: { title: i18n.t('axis_y') },
+        title: { text: xPop.title, font: { size: 14, color: colors.text } },
+        paper_bgcolor: 'rgba(0, 0, 0, 0)',
+        plot_bgcolor: 'rgba(0, 0, 0, 0)',
+        font: { color: colors.secondary, size: 11 },
+        margin: { l: 50, r: 30, t: 40, b: 60 },
+        xaxis: { title: i18n.t('axis_x'), range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], scaleanchor: 'y', constrain: 'domain' },
+        yaxis: { title: i18n.t('axis_y'), range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], constrain: 'domain' },
     }, { responsive: true, displayModeBar: false });
 
     // Y种群热力图
@@ -472,13 +523,13 @@ function render2DPatterns(vizData) {
         colorscale: 'Plasma',
         colorbar: { title: i18n.t('density'), len: 0.8 },
     }], {
-        title: { text: yPop.title, font: { size: 14, color: '#e0e4ec' } },
-        paper_bgcolor: '#0a0e14',
-        plot_bgcolor: '#0a0e14',
-        font: { color: '#b0bed0', size: 11 },
-        margin: { l: 50, r: 30, t: 40, b: 40 },
-        xaxis: { title: i18n.t('axis_x'), scaleanchor: 'y' },
-        yaxis: { title: i18n.t('axis_y') },
+        title: { text: yPop.title, font: { size: 14, color: colors.text } },
+        paper_bgcolor: 'rgba(0, 0, 0, 0)',
+        plot_bgcolor: 'rgba(0, 0, 0, 0)',
+        font: { color: colors.secondary, size: 11 },
+        margin: { l: 50, r: 30, t: 40, b: 60 },
+        xaxis: { title: i18n.t('axis_x'), range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], scaleanchor: 'y', constrain: 'domain' },
+        yaxis: { title: i18n.t('axis_y'), range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], constrain: 'domain' },
     }, { responsive: true, displayModeBar: false });
 
     // 合并斑图
@@ -497,13 +548,13 @@ function render2DPatterns(vizData) {
         ],
         colorbar: { title: i18n.t('density'), len: 0.8 },
     }], {
-        title: { text: combined.title, font: { size: 14, color: '#e0e4ec' } },
-        paper_bgcolor: '#0a0e14',
-        plot_bgcolor: '#0a0e14',
-        font: { color: '#b0bed0', size: 11 },
-        margin: { l: 50, r: 30, t: 40, b: 40 },
-        xaxis: { title: i18n.t('axis_x'), scaleanchor: 'y' },
-        yaxis: { title: i18n.t('axis_y') },
+        title: { text: combined.title, font: { size: 14, color: colors.text } },
+        paper_bgcolor: 'rgba(0, 0, 0, 0)',
+        plot_bgcolor: 'rgba(0, 0, 0, 0)',
+        font: { color: colors.secondary, size: 11 },
+        margin: { l: 50, r: 30, t: 40, b: 60 },
+        xaxis: { title: i18n.t('axis_x'), range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], scaleanchor: 'y', constrain: 'domain' },
+        yaxis: { title: i18n.t('axis_y'), range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], constrain: 'domain' },
     }, { responsive: true, displayModeBar: false });
 
     // 跟踪点标记（在合并图上）
@@ -532,14 +583,14 @@ function render2DPatterns(vizData) {
     }));
 
     Plotly.newPlot('chart-evolution', curveTraces, {
-        title: { text: evolution.title, font: { size: 15, color: '#e0e4ec' } },
-        paper_bgcolor: '#0a0e14',
-        plot_bgcolor: '#1a1f2b',
-        font: { color: '#b0bed0', size: 11 },
-        margin: { l: 60, r: 30, t: 40, b: 50 },
-        xaxis: { title: i18n.t('iterations_axis'), gridcolor: '#3a4558', zeroline: false },
-        yaxis: { title: i18n.t('density_axis'), gridcolor: '#3a4558', zeroline: false },
-        legend: { font: { size: 9 }, bgcolor: '#131820', bordercolor: '#3a4558' },
+        title: { text: evolution.title, font: { size: 15, color: colors.text } },
+        paper_bgcolor: 'rgba(0, 0, 0, 0)',
+        plot_bgcolor: 'rgba(0, 0, 0, 0)',
+        font: { color: colors.secondary, size: 11 },
+        margin: { l: 60, r: 30, t: 40, b: 60 },
+        xaxis: { title: i18n.t('iterations_axis'), gridcolor: colors.grid, zeroline: false },
+        yaxis: { title: i18n.t('density_axis'), gridcolor: colors.grid, zeroline: false },
+        legend: { font: { size: 9 }, bgcolor: 'rgba(0, 0, 0, 0)', bordercolor: colors.border },
         hovermode: 'closest',
     }, { responsive: true, displayModeBar: false });
 }
@@ -564,6 +615,7 @@ function settle3DCamera(chart) {
  * @param {Object} vizData - 可视化数据
  */
 function render3DPattern(vizData) {
+    const colors = getPlotTheme();
     const chart = $('#chart-3d');
     const renderToken = ++state.render3dToken;
     const zArr = vizData.z;
@@ -587,8 +639,8 @@ function render3DPattern(vizData) {
         type: 'surface',
         colorscale: 'Viridis',
         colorbar: {
-            title: { text: i18n.t('density'), font: { size: 13, color: '#b0bed0' } },
-            tickfont: { size: 13, color: '#8895aa' },
+            title: { text: i18n.t('density'), font: { size: 13, color: colors.secondary } },
+            tickfont: { size: 13, color: colors.muted },
             tickmode: 'array', tickvals: cbarTickVals, ticktext: cbarTickText,
         },
         contours: {
@@ -614,36 +666,36 @@ function render3DPattern(vizData) {
     };
     const trace = [surfaceTrace, projectionTrace];
     const layout = {
-        title: { text: vizData.title, font: { size: 15, color: '#e0e4ec' } },
-        paper_bgcolor: '#0a0e14',
+        title: { text: vizData.title, font: { size: 15, color: colors.text } },
+        paper_bgcolor: 'rgba(0, 0, 0, 0)',
         scene: {
             xaxis: {
-                title: { text: i18n.t('axis_x'), standoff: 25, font: { size: 15, color: '#c0cce0' } },
-                showgrid: true, gridcolor: 'rgba(255,255,255,0.12)', gridwidth: 1,
-                color: '#b0bed0',
-                tickfont: { size: 13, color: '#8895aa' },
-                showline: true, linecolor: '#7a8aa0', linewidth: 3,
-                ticks: 'outside', tickcolor: '#7a8aa0', ticklen: 8,
+                title: { text: i18n.t('axis_x'), standoff: 25, font: { size: 15, color: colors.text } },
+                showgrid: true, gridcolor: colors.grid, gridwidth: 1,
+                color: colors.secondary,
+                tickfont: { size: 13, color: colors.muted },
+                showline: true, linecolor: colors.axis, linewidth: 3,
+                ticks: 'outside', tickcolor: colors.axis, ticklen: 8,
                 range: [0, 100], tickangle: 0,
                 tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100],
             },
             yaxis: {
-                title: { text: i18n.t('axis_y'), standoff: 25, font: { size: 15, color: '#c0cce0' } },
-                showgrid: true, gridcolor: 'rgba(255,255,255,0.12)', gridwidth: 1,
-                color: '#b0bed0',
-                tickfont: { size: 13, color: '#8895aa' },
-                showline: true, linecolor: '#7a8aa0', linewidth: 3,
-                ticks: 'outside', tickcolor: '#7a8aa0', ticklen: 8,
+                title: { text: i18n.t('axis_y'), standoff: 25, font: { size: 15, color: colors.text } },
+                showgrid: true, gridcolor: colors.grid, gridwidth: 1,
+                color: colors.secondary,
+                tickfont: { size: 13, color: colors.muted },
+                showline: true, linecolor: colors.axis, linewidth: 3,
+                ticks: 'outside', tickcolor: colors.axis, ticklen: 8,
                 range: [0, 100], tickangle: 0,
                 tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100],
             },
             zaxis: {
-                title: { text: i18n.t('density_axis'), standoff: 25, font: { size: 15, color: '#c0cce0' } },
-                showgrid: true, gridcolor: 'rgba(255,255,255,0.12)', gridwidth: 1,
-                color: '#b0bed0',
-                tickfont: { size: 13, color: '#8895aa' },
-                showline: true, linecolor: '#7a8aa0', linewidth: 3,
-                ticks: 'outside', tickcolor: '#7a8aa0', ticklen: 8,
+                title: { text: i18n.t('density_axis'), standoff: 25, font: { size: 15, color: colors.text } },
+                showgrid: true, gridcolor: colors.grid, gridwidth: 1,
+                color: colors.secondary,
+                tickfont: { size: 13, color: colors.muted },
+                showline: true, linecolor: colors.axis, linewidth: 3,
+                ticks: 'outside', tickcolor: colors.axis, ticklen: 8,
                 range: [0, 100], tickangle: 0,
                 // 刻度位置在0-100，标签映射回真实数据值
                 tickmode: 'array', tickvals: zTickVals, ticktext: zTickText,
@@ -651,7 +703,7 @@ function render3DPattern(vizData) {
             // 三轴均0-100，aspectratio 1:1:1等物理长度，轴固定不漂移
             aspectmode: 'manual',
             aspectratio: { x: 1, y: 1, z: 1 },
-            bgcolor: '#0a0e14',
+            bgcolor: 'rgba(0, 0, 0, 0)',
             camera: {
                 eye: { x: 1.5, y: 1.5, z: 1.2 },
                 center: { x: 0, y: 0, z: -0.2 },
@@ -739,41 +791,44 @@ async function runAnimation() {
  * @param {number} frameIdx - 帧索引
  */
 function renderAnimFrame(frameIdx) {
+    const colors = getPlotTheme();
     const data = state.animationData;
     const frame = data.frames[frameIdx];
     const displayFrames = data.total_frames;
     const iterNum = (state.animStart || 0) + frameIdx;
 
     // X种群帧
-    Plotly.react('chart-anim-x', [{
+    renderAnimationPlot('chart-anim-x', [{
         z: frame.x_data,
         type: 'heatmap',
         colorscale: 'Viridis',
-        colorbar: { title: '', len: 0.7, thickness: 15, x: 1.02, showticklabels: false },
+        colorbar: { title: i18n.t('density'), len: 0.8 },
     }], {
-        title: { text: i18n.t('anim_title_x', { iter: iterNum }), font: { size: 13, color: '#e0e4ec' } },
-        paper_bgcolor: '#0a0e14',
-        plot_bgcolor: '#0a0e14',
-        font: { color: '#b0bed0', size: 10 },
-        margin: { l: 40, r: 35, t: 35, b: 35 },
-        xaxis: { range: [0, 99], autorange: false, fixedrange: true, scaleanchor: 'y' },
-        yaxis: { range: [0, 99], autorange: false, fixedrange: true },
+        title: { text: i18n.t('anim_title_x', { iter: iterNum }), font: { size: 13, color: colors.text } },
+        height: 420,
+        paper_bgcolor: 'rgba(0, 0, 0, 0)',
+        plot_bgcolor: 'rgba(0, 0, 0, 0)',
+        font: { color: colors.secondary, size: 10 },
+        margin: { l: 40, r: 35, t: 35, b: 60 },
+        xaxis: { title: i18n.t('axis_x'), range: [0, 100], autorange: false, fixedrange: true, tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], scaleanchor: 'y', constrain: 'domain' },
+        yaxis: { title: i18n.t('axis_y'), range: [0, 100], autorange: false, fixedrange: true, tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], constrain: 'domain' },
     }, { responsive: false, displayModeBar: false });
 
     // Y种群帧
-    Plotly.react('chart-anim-y', [{
+    renderAnimationPlot('chart-anim-y', [{
         z: frame.y_data,
         type: 'heatmap',
         colorscale: 'Plasma',
-        colorbar: { title: '', len: 0.7, thickness: 15, x: 1.02, showticklabels: false },
+        colorbar: { title: i18n.t('density'), len: 0.8 },
     }], {
-        title: { text: i18n.t('anim_title_y', { iter: iterNum }), font: { size: 13, color: '#e0e4ec' } },
-        paper_bgcolor: '#0a0e14',
-        plot_bgcolor: '#0a0e14',
-        font: { color: '#b0bed0', size: 10 },
-        margin: { l: 40, r: 35, t: 35, b: 35 },
-        xaxis: { range: [0, 99], autorange: false, fixedrange: true, scaleanchor: 'y' },
-        yaxis: { range: [0, 99], autorange: false, fixedrange: true },
+        title: { text: i18n.t('anim_title_y', { iter: iterNum }), font: { size: 13, color: colors.text } },
+        height: 420,
+        paper_bgcolor: 'rgba(0, 0, 0, 0)',
+        plot_bgcolor: 'rgba(0, 0, 0, 0)',
+        font: { color: colors.secondary, size: 10 },
+        margin: { l: 40, r: 35, t: 35, b: 60 },
+        xaxis: { title: i18n.t('axis_x'), range: [0, 100], autorange: false, fixedrange: true, tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], scaleanchor: 'y', constrain: 'domain' },
+        yaxis: { title: i18n.t('axis_y'), range: [0, 100], autorange: false, fixedrange: true, tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], constrain: 'domain' },
     }, { responsive: false, displayModeBar: false });
 
     // 合并斑图
@@ -787,7 +842,7 @@ function renderAnimFrame(frameIdx) {
     const yNorm = yArr.map(row => row.map(v => (v - yMin) / (yMax - yMin + 1e-10)));
     const combined = xNorm.map((row, i) => row.map((v, j) => v + yNorm[i][j]));
 
-    Plotly.react('chart-anim-combined', [{
+    renderAnimationPlot('chart-anim-combined', [{
         z: combined,
         type: 'heatmap',
         colorscale: [
@@ -797,15 +852,16 @@ function renderAnimFrame(frameIdx) {
             [0.75, 'rgb(0,180,0)'],
             [1, 'rgb(0,200,200)'],
         ],
-        colorbar: { title: '', len: 0.7, thickness: 15, x: 1.02, showticklabels: false },
+        colorbar: { title: i18n.t('density'), len: 0.8 },
     }], {
-        title: { text: i18n.t('anim_title_combined', { iter: iterNum }), font: { size: 13, color: '#e0e4ec' } },
-        paper_bgcolor: '#0a0e14',
-        plot_bgcolor: '#0a0e14',
-        font: { color: '#b0bed0', size: 10 },
-        margin: { l: 40, r: 35, t: 35, b: 35 },
-        xaxis: { range: [0, 99], autorange: false, fixedrange: true, scaleanchor: 'y' },
-        yaxis: { range: [0, 99], autorange: false, fixedrange: true },
+        title: { text: i18n.t('anim_title_combined', { iter: iterNum }), font: { size: 13, color: colors.text } },
+        height: 420,
+        paper_bgcolor: 'rgba(0, 0, 0, 0)',
+        plot_bgcolor: 'rgba(0, 0, 0, 0)',
+        font: { color: colors.secondary, size: 10 },
+        margin: { l: 40, r: 35, t: 35, b: 60 },
+        xaxis: { title: i18n.t('axis_x'), range: [0, 100], autorange: false, fixedrange: true, tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], scaleanchor: 'y', constrain: 'domain' },
+        yaxis: { title: i18n.t('axis_y'), range: [0, 100], autorange: false, fixedrange: true, tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], constrain: 'domain' },
     }, { responsive: false, displayModeBar: false });
 
     $('#anim-slider').value = frameIdx;
@@ -816,6 +872,7 @@ function renderAnimFrame(frameIdx) {
  * 渲染动画演化曲线
  */
 function renderAnimEvolution() {
+    const colors = getPlotTheme();
     const data = state.animationData;
     const cs = data.center_series;
 
@@ -823,25 +880,25 @@ function renderAnimEvolution() {
     const actualStartTime = state.animStart || 0;
     const adjustedTime = cs.time.map(t => t + actualStartTime);
 
-    Plotly.react('chart-anim-evo', [
+    renderAnimationPlot('chart-anim-evo', [
         { x: adjustedTime, y: cs.x, type: 'scatter', mode: 'lines', name: i18n.t('center_x'),
           line: { color: '#3498DB', width: 2 } },
         { x: adjustedTime, y: cs.y, type: 'scatter', mode: 'lines', name: i18n.t('center_y'),
           line: { color: '#E74C3C', width: 2 } },
     ], {
-        title: { text: i18n.t('center_evo_title'), font: { size: 13, color: '#e0e4ec' } },
-        paper_bgcolor: '#0a0e14',
-        plot_bgcolor: '#1a1f2b',
-        font: { color: '#b0bed0', size: 10 },
-        margin: { l: 50, r: 20, t: 35, b: 40 },
+        title: { text: i18n.t('center_evo_title'), font: { size: 13, color: colors.text } },
+        paper_bgcolor: 'rgba(0, 0, 0, 0)',
+        plot_bgcolor: 'rgba(0, 0, 0, 0)',
+        font: { color: colors.secondary, size: 10 },
+        margin: { l: 50, r: 20, t: 35, b: 60 },
         xaxis: {
             title: i18n.t('iterations_axis'),
-            gridcolor: '#3a4558',
+            gridcolor: colors.grid,
             // 设置x轴范围，显示从起始迭代到结束迭代的完整范围
             range: [actualStartTime, actualStartTime + cs.time.length - 1]
         },
-        yaxis: { title: i18n.t('density_axis'), gridcolor: '#3a4558' },
-        legend: { font: { size: 9 }, bgcolor: '#131820', bordercolor: '#3a4558' },
+        yaxis: { title: i18n.t('density_axis'), gridcolor: colors.grid },
+        legend: { font: { size: 9 }, bgcolor: 'rgba(0, 0, 0, 0)', bordercolor: colors.border },
     }, { responsive: true, displayModeBar: false });
 }
 
@@ -901,6 +958,16 @@ function switchTab(tabId) {
     // 三维标签首次可见时懒渲染（容器尺寸正确，避免左上角放大过渡）
     if (tabId === 'tab-3d' && state.lastViz3d && !state.rendered3d) {
         render3DPattern(state.lastViz3d);
+    }
+
+    // 二维斑图只在进入二维标签时恢复，动画页刷新不提前绘制二维图表
+    if (tabId === 'tab-2d' && state.lastViz2d && !$('#chart-x-pop')._fullLayout) {
+        render2DPatterns(state.lastViz2d);
+    }
+
+    // 动画缓存按需加载，避免初始恢复阻塞二维页面
+    if (tabId === 'tab-anim' && !state.animationData) {
+        restoreAnimationCache();
     }
 
     // 切换后触发所有图表resize（三维图除外：WebGL自动适配，resize反而引起画布重建闪烁）

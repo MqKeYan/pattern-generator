@@ -245,12 +245,17 @@ def cleanup():
 @app.route('/api/restore', methods=['POST'])
 def restore():
     """恢复客户端缓存的图表数据"""
-    client_id = request.get_json().get('client_id', '')
+    data = request.get_json() or {}
+    client_id = data.get('client_id', '')
+    include_animation = data.get('include_animation', True)
     if client_id and client_id in client_cache:
         cache_type = client_cache[client_id].get('type', '未知')
         log.info(f"→ 恢复缓存：客户端 {client_id[:8]}...，类型={cache_type}")
+        cached = dict(client_cache[client_id])
+        if not include_animation:
+            cached.pop('anim', None)
         return jsonify({
             'success': True,
-            'cached': client_cache[client_id],
+            'cached': cached,
         })
     return jsonify({'success': False, 'cached': None})
