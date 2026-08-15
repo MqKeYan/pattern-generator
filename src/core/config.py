@@ -5,30 +5,40 @@ MODEL_CONFIGS = {
     "模型1": {
         "params": ["r", "a", "K", "d", "mu", "D1", "D2"],
         "defaults": [0.2, 0.5, 2.0, 0.3, 1.2, 0.05, 0.2],
+        "min_iterations": 100,
+        "max_iterations": 50000,
         "recommended_iterations": 9000,
         "description": "Rosenzweig-MacArthur 型捕食者-猎物模型"
     },
     "模型2": {
         "params": ["r", "a", "b", "c1", "c2", "D1", "D2", "R"],
         "defaults": [1.3, 0.9, 0.04, 1.173, 0.18, 0.002, 0.03, 0.5],
+        "min_iterations": 100,
+        "max_iterations": 50000,
         "recommended_iterations": 15000,
         "description": "Holling II 型捕食者-猎物模型"
     },
     "模型3": {
         "params": ["r", "a", "b", "c", "d", "k", "D1", "D2"],
         "defaults": [2.85, 0.28, 0.6, 0.815, 0.32, 3.88, 0.003, 0.03],
+        "min_iterations": 100,
+        "max_iterations": 50000,
         "recommended_iterations": 15000,
         "description": "Ratio-dependent 捕食者-猎物模型"
     },
     "模型4": {
         "params": ["r", "a", "D"],
         "defaults": [2.2, 1.1, 0.18],
+        "min_iterations": 100,
+        "max_iterations": 50000,
         "recommended_iterations": 10000,
         "description": "对称竞争模型"
     },
     "模型5": {
         "params": ["a", "b", "d", "h", "K", "r", "D1", "D2"],
         "defaults": [0.7, 0.55, 0.35, 0.001, 0.9, 0.75, 0.0008, 0.01],
+        "min_iterations": 100,
+        "max_iterations": 50000,
         "recommended_iterations": 4000,
         "description": "连续化的离散捕食者-猎物模型"
     }

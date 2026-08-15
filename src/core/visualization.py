@@ -118,37 +118,49 @@ class PatternVisualizer:
         # 时间轴从起始迭代开始，对应实际迭代次数
         time = [start_iteration + i for i in range(len(center_data['x']))]
 
-        curves = [
-            {
-                'name': _tr(lang, 'center_x'),
-                'x': time,
-                'y': center_data['x'],
-                'color': self.color_palette['x_center'],
-                'line_width': 2,
-                'dash': 'solid',
-                'visible': True,
-                'type': 'center',
-            },
-            {
-                'name': _tr(lang, 'center_y'),
-                'x': time,
-                'y': center_data['y'],
-                'color': self.color_palette['y_center'],
-                'line_width': 2,
-                'dash': 'solid',
-                'visible': True,
-                'type': 'center',
-            },
-        ]
+        curves = []
+
+        # 无自定义跟踪点时显示默认中心点(50,50)曲线；有跟踪点时只显示添加的点
+        if not track_points:
+            curves = [
+                {
+                    'name': _tr(lang, 'center_x'),
+                    'x': time,
+                    'y': center_data['x'],
+                    'color': self.color_palette['x_center'],
+                    'line_width': 2,
+                    'dash': 'solid',
+                    'visible': True,
+                    'type': 'center',
+                },
+                {
+                    'name': _tr(lang, 'center_y'),
+                    'x': time,
+                    'y': center_data['y'],
+                    'color': self.color_palette['y_center'],
+                    'line_width': 2,
+                    'dash': 'solid',
+                    'visible': True,
+                    'type': 'center',
+                },
+            ]
 
         # 自定义跟踪点曲线
         if track_points:
             custom_colors = ['#2ECC71', '#F39C12', '#9B59B6', '#1ABC9C', '#34495E', '#7F8C8D']
+            # 只有一个跟踪点时使用默认双色（X蓝/Y红），多个跟踪点才用专属颜色区分
+            single_point = len(track_points) == 1
             for i, point in enumerate(track_points):
                 point_key = f"point_{point['x']}_{point['y']}"
                 if point_key in evolution_data:
-                    color_x = custom_colors[i % len(custom_colors)]
-                    color_y = custom_colors[(i + 1) % len(custom_colors)]
+                    if single_point:
+                        # 单跟踪点：默认状态的两种颜色
+                        color_x = self.color_palette['x_center']
+                        color_y = self.color_palette['y_center']
+                    else:
+                        # 多跟踪点：前端分配的固定颜色优先（X/Y同色），缺省回退按索引分配
+                        color_x = point.get('color') or custom_colors[i % len(custom_colors)]
+                        color_y = color_x  # 同一点的X/Y使用同一种颜色
 
                     curves.append({
                         'name': f"{_tr(lang, 'point')}({point['x']},{point['y']})-X",
@@ -156,7 +168,7 @@ class PatternVisualizer:
                         'y': evolution_data[point_key]['x'],
                         'color': color_x,
                         'line_width': 1.5,
-                        'dash': 'dash',
+                        'dash': 'solid',  # X统一实线
                         'visible': True,
                         'type': 'custom',
                     })
@@ -166,7 +178,7 @@ class PatternVisualizer:
                         'y': evolution_data[point_key]['y'],
                         'color': color_y,
                         'line_width': 1.5,
-                        'dash': 'dash',
+                        'dash': 'solid' if single_point else 'dash',  # 单跟踪点XY都用实线，多跟踪点Y用虚线
                         'visible': True,
                         'type': 'custom',
                     })

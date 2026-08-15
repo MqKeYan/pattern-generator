@@ -31,16 +31,16 @@ from flask import Flask, render_template, jsonify, request
 import torch
 
 # 模块导入
-from config import MODEL_CONFIGS, GRID_SIZE, MODEL_INIT_RANGES, PARAM_NAMES, MODEL_DISPLAY_NAMES
+from core.config import MODEL_CONFIGS, GRID_SIZE, MODEL_INIT_RANGES, PARAM_NAMES, MODEL_DISPLAY_NAMES
 from version import VERSION
-from simulation import PatternSimulator
-from visualization import PatternVisualizer
+from core.simulation import PatternSimulator
+from core.visualization import PatternVisualizer
 
 # 获取模板和静态文件路径
 if getattr(sys, 'frozen', False):
-    # PyInstaller打包后的路径，模板文件在src/templates
-    template_folder = os.path.join(sys._MEIPASS, 'src', 'templates')
-    static_folder = os.path.join(sys._MEIPASS, 'src', 'static')
+    # PyInstaller打包后的路径，模板文件在src/web/templates
+    template_folder = os.path.join(sys._MEIPASS, 'src', 'web', 'templates')
+    static_folder = os.path.join(sys._MEIPASS, 'src', 'web', 'static')
 else:
     # 开发环境的路径
     base_path = os.path.dirname(__file__)
@@ -99,9 +99,7 @@ def run_simulation():
 
         # 日志：开始模拟
         t0 = time.time()
-        log.info(f"→ 开始模拟：{model_name}，迭代{iterations}次，"
-              f"X[{init_x_range[0]:.2f}~{init_x_range[1]:.2f}] "
-              f"Y[{init_y_range[0]:.2f}~{init_y_range[1]:.2f}]")
+        log.info(f"→ 开始模拟：{model_name}，迭代{iterations}次")
         track_points = data.get('track_points', [])
 
         # 验证模型存在
@@ -249,8 +247,7 @@ def restore():
     client_id = data.get('client_id', '')
     include_animation = data.get('include_animation', True)
     if client_id and client_id in client_cache:
-        cache_type = client_cache[client_id].get('type', '未知')
-        log.info(f"→ 恢复缓存：客户端 {client_id[:8]}...，类型={cache_type}")
+        log.info(f"→ 恢复缓存：客户端 {client_id}")
         cached = dict(client_cache[client_id])
         if not include_animation:
             cached.pop('anim', None)

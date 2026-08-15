@@ -1,8 +1,3 @@
-/**
- * 斑图形成可视化系统 - 前端交互逻辑
- * 主要功能：模型参数设置、模拟计算、动画展示、数据可视化
- */
-
 // 全局状态管理
 const state = {
     currentModel: '模型1',  // 当前选择的模型
@@ -120,7 +115,7 @@ function showToast(msg, type = 'info') {
     toast.className = `toast ${type}`;
     toast.textContent = msg;
     container.appendChild(toast);
-    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3500);
+    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 5000);
 }
 
 /**
@@ -186,8 +181,11 @@ async function init() {
         state.paramNames = config.param_names;
         state.modelDisplayNames = config.display_names || {};
 
-        // 硬件信息
-        $('#hardware-badge').textContent = ' ' + config.hardware_info;
+        // 硬件信息：去掉 GPU:/CPU: 前缀，统一显示"计算硬件: 型号"
+        $('#hardware-badge').textContent = '计算硬件: ' + config.hardware_info.replace(/^(GPU|CPU):\s*/, '');
+
+        // 客户端名称
+        $('#client-badge').textContent = '客户端: ' + state.clientId;
 
         // 构建模型选择器（模型名按语言翻译）
         const select = $('#model-select');
@@ -245,6 +243,9 @@ async function init() {
         } else {
             setStatus(i18n.t('status_ready'));
         }
+
+        // 确保跟踪点列表正确显示（无论是否有缓存）
+        updateTrackList();
 
         // 恢复刷新前的标签页位置（三维标签会触发懒渲染）
         restoreTab();
@@ -411,7 +412,10 @@ function addTrackPoint() {
         showToast(i18n.t('point_exists', { x, y }), 'info');
         return;
     }
-    state.trackPoints.push({ x, y });
+    // 为跟踪点分配颜色（8 种可选颜色循环使用）
+    const colors = ['#2ecc71', '#1abc9c', '#3498db', '#9b59b6', '#e74c3c', '#f39c12', '#e67e22', '#34495e'];
+    const colorIndex = state.trackPoints.length % colors.length;
+    state.trackPoints.push({ x, y, color: colors[colorIndex] });
     updateTrackList();
 }
 
@@ -431,9 +435,76 @@ function updateTrackList() {
     if (state.trackPoints.length === 0) {
         el.textContent = i18n.t('track_list_center');
     } else {
-        const pts = state.trackPoints.map(p => `(${p.x},${p.y})`).join(', ');
-        el.textContent = i18n.t('track_list_custom', { pts });
+        renderTrackPoints();
     }
+}
+
+/**
+ * 渲染跟踪点列表
+ */
+function renderTrackPoints() {
+    const el = $('#track-list');
+    el.innerHTML = '';
+    state.trackPoints.forEach(p => {
+        // 确保每个跟踪点都有颜色（兼容旧数据）
+        if (!p.color) {
+            const colors = ['#2ecc71', '#1abc9c', '#3498db', '#9b59b6', '#e74c3c', '#f39c12', '#e67e22', '#34495e'];
+            p.color = colors[state.trackPoints.indexOf(p) % colors.length];
+        }
+        const li = document.createElement('li');
+        li.className = 'track-item';
+
+        // 颜色圆点，与演化曲线颜色一致
+        const dot = document.createElement('span');
+        dot.className = 'track-dot';
+        dot.style.background = p.color;
+
+        const label = document.createElement('span');
+        label.className = 'track-label';
+        label.textContent = `(${p.x},${p.y})`;
+
+        // 操作按钮：编辑 / 删除
+        const ops = document.createElement('span');
+        ops.className = 'track-ops';
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-outline btn-accent';
+        editBtn.textContent = i18n.t('edit');
+        editBtn.addEventListener('click', () => startEditTrack(p.id));
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn btn-outline btn-danger';
+        delBtn.textContent = i18n.t('delete');
+        delBtn.addEventListener('click', () => { deleteTrackPoint(p.id); saveSettings(); });
+        ops.appendChild(editBtn);
+        ops.appendChild(delBtn);
+
+        li.appendChild(dot);
+        li.appendChild(label);
+        li.appendChild(ops);
+        el.appendChild(li);
+    });
+}
+
+/**
+ * 编辑跟踪点
+ * 将跟踪点的坐标填入输入框
+ */
+function startEditTrack(id) {
+    const p = state.trackPoints.find(pt => pt.id === id);
+    if (!p) return;
+    $('#track-x').value = p.x;
+    $('#track-y').value = p.y;
+    // 删除原跟踪点，添加新跟踪点（保持颜色不变）
+    deleteTrackPoint(id);
+    saveSettings();
+}
+
+/**
+ * 删除跟踪点
+ * 根据 ID 删除跟踪点
+ */
+function deleteTrackPoint(id) {
+    state.trackPoints = state.trackPoints.filter(p => p.id !== id);
+    updateTrackList();
 }
 
 /**

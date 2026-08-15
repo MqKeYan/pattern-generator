@@ -19,7 +19,10 @@
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <h1 class="app-title" data-i18n="app_title">斑图形成可视化系统</h1>
-                <span class="hardware-badge" id="hardware-badge" data-i18n="loading">加载中...</span>
+                <div class="client-card">
+                    <div class="hardware-badge" id="hardware-badge" data-i18n="loading">加载中...</div>
+                    <div class="client-badge" id="client-badge" data-i18n="loading">加载中...</div>
+                </div>
             </div>
 
             <div class="sidebar-scroll">
@@ -39,7 +42,7 @@
                 <section class="panel-card">
                     <h3 class="card-title" data-i18n="params_setting">参数设置</h3>
                     <div id="params-container"></div>
-                    <button class="btn btn-outline" id="reset-params" data-i18n="reset_params">重置参数</button>
+                    <button class="btn btn-outline btn-danger" id="reset-params" data-i18n="reset_params">重置参数</button>
                 </section>
 
                 <!-- 初始值范围 -->
@@ -56,7 +59,7 @@
                         <label data-i18n="y_max">Y 最大值</label>
                         <input type="number" id="y-max" step="0.01" class="num-input">
                     </div>
-                    <button class="btn btn-outline" id="apply-best-init" data-i18n="apply_best_init">应用最佳初始值</button>
+                    <button class="btn btn-outline btn-info" id="apply-best-init" data-i18n="apply_best_init">应用最佳初始值</button>
                 </section>
 
                 <!-- 跟踪点设置 -->
@@ -69,20 +72,20 @@
                         <input type="number" id="track-y" value="50" min="0" max="99" class="num-input">
                     </div>
                     <div class="btn-row">
-                        <button class="btn btn-success" id="add-track" data-i18n="add">添加</button>
-                        <button class="btn btn-warning" id="clear-track" data-i18n="clear">清空</button>
+                        <button class="btn btn-outline btn-primary" id="add-track" data-i18n="add">添加</button>
+                        <button class="btn btn-outline btn-danger" id="clear-track" data-i18n="clear">清空</button>
                     </div>
-                    <div class="track-list" id="track-list" data-i18n="track_list_center">当前跟踪点: 中心点(50,50)</div>
+                    <ul class="track-list" id="track-list" data-i18n="track_list_center">当前跟踪点: 中心点(50,50)</ul>
                 </section>
 
                 <!-- 迭代次数 -->
                 <section class="panel-card">
                     <h3 class="card-title" data-i18n="iterations">迭代次数</h3>
                     <div class="range-container">
-                        <input type="range" id="iter-range" min="100" max="20000" value="9000" class="range-input">
+                        <input type="range" id="iter-range" min="100" max="50000" value="9000" class="range-input">
                         <input type="number" id="iter-value" value="9000" class="num-input num-inline">
                     </div>
-                    <button class="btn btn-outline" id="reset-iters" data-i18n="reset_iters">重置推荐值</button>
+                    <button class="btn btn-outline btn-info" id="reset-iters" data-i18n="reset_iters">重置推荐值</button>
                 </section>
 
                 <!-- 动画设置 -->
@@ -101,16 +104,16 @@
                 <!-- 控制面板 -->
                 <section class="panel-card control-section">
                     <h3 class="card-title" data-i18n="control_panel">控制面板</h3>
-                    <button class="btn btn-primary" id="run-sim" data-i18n="run_sim">
+                    <button class="btn btn-outline btn-success" id="run-sim" data-i18n="run_sim">
                         运行模拟
                     </button>
-                    <button class="btn btn-accent" id="run-anim" data-i18n="run_anim">
+                    <button class="btn btn-outline btn-success" id="run-anim" data-i18n="run_anim">
                         开始动画
                     </button>
-                    <button class="btn btn-outline" id="reset-all" data-i18n="reset_all">
+                    <button class="btn btn-outline btn-danger" id="reset-all" data-i18n="reset_all">
                         重置所有
                     </button>
-                    <button class="btn btn-outline" id="clean-cache" data-i18n="clean_cache">
+                    <button class="btn btn-outline btn-danger" id="clean-cache" data-i18n="clean_cache">
                         清理缓存
                     </button>
                     <div class="status-text" id="status-msg" data-i18n="status_ready">就绪，请选择参数运行模拟</div>
@@ -145,8 +148,8 @@
             <!-- 动画面板 -->
             <div class="tab-panel" id="tab-anim">
                 <div class="anim-control-bar">
-                    <button class="btn btn-primary" id="anim-play"><span>▶</span> <span data-i18n="play">播放</span></button>
-                    <button class="btn btn-outline" id="anim-pause" data-i18n="pause">暂停</button>
+                    <button class="btn btn-outline btn-success" id="anim-play"><span data-i18n="play">播放</span></button>
+                    <button class="btn btn-outline btn-warning" id="anim-pause" data-i18n="pause">暂停</button>
                     <span class="anim-frame-info" id="anim-frame-info">帧: 0 / 0</span>
                     <input type="range" id="anim-slider" min="0" max="100" value="0" class="anim-slider">
                     <span class="anim-speed-label" data-i18n="speed">速度:</span>

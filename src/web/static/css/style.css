@@ -1,9 +1,4 @@
-/* ============================================================
-   斑图形成可视化系统 - 现代化深色科技主题
-   ============================================================ */
-
-/* === 本地字体：思源黑体可变字体（Noto Sans CJK VF）
-   一个文件包含简/繁/港/日/韩全语言变体 + 全字重(100~900) === */
+/* === 本地字体：思源黑体可变字体（Noto Sans CJK VF） === */
 @font-face {
     font-family: 'Noto Sans CJK SC';
     src: url('/static/fonts/NotoSansCJK-VF.otf.ttc') format('truetype');
@@ -220,16 +215,31 @@ body::after {
     background-clip: text;
 }
 
+/* 硬件与客户端信息卡片 */
+.client-card {
+    margin-top: 12px;
+    padding: 12px 16px;
+    text-align: left;
+    background: rgba(20, 31, 49, 0.58);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--color-primary);
+    box-shadow: var(--glass-highlight);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
 .hardware-badge {
-    display: inline-block;
-    margin-top: 8px;
-    padding: 3px 10px;
-    font-size: 12px;
-    font-family: var(--font-mono);
+    font-size: 15px;
+    font-family: var(--font-cjk);
     color: var(--color-primary);
-    background: var(--color-primary-glow);
-    border: 1px solid rgba(59, 139, 235, 0.25);
-    border-radius: 20px;
+    margin-bottom: 8px;
+    word-break: break-all;
+}
+.client-badge {
+    font-size: 15px;
+    font-family: var(--font-cjk);
+    color: var(--color-primary);
+    word-break: break-all;
 }
 
 .sidebar-scroll {
@@ -360,14 +370,14 @@ body::after {
     gap: 6px 10px;
     margin-bottom: 10px;
     align-items: center;
-    font-size: 13px;
+    font-size: 14px;
     color: var(--color-text-secondary);
 }
 
 /* === 参数列表 === */
 .param-row {
     display: grid;
-    grid-template-columns: 130px 1fr 48px;
+    grid-template-columns: 130px 1fr 62px;
     gap: 4px 8px;
     align-items: center;
     margin-bottom: 10px;
@@ -385,17 +395,19 @@ body::after {
     font-size: 16px;
     height: 100%;
     background: rgba(20, 31, 49, 0.58);
-    color: var(--color-text);
+    color: var(--color-danger);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     cursor: pointer;
     white-space: nowrap;
     transition: all var(--transition-fast);
     box-shadow: var(--glass-highlight);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
 }
 .param-reset:hover {
-    color: var(--color-text);
-    border-color: var(--color-primary);
+    color: #ff6b5e;
+    border-color: var(--color-danger);
 }
 
 /* === 跟踪点 === */
@@ -405,19 +417,58 @@ body::after {
     gap: 6px 10px;
     align-items: center;
     margin-bottom: 10px;
-    font-size: 13px;
+    font-size: 14px;
     color: var(--color-text-secondary);
 }
 .track-list {
-    margin-top: 8px;
-    padding: 8px;
+    margin-top: 6px;
+    padding: 6px;
     background: rgba(20, 31, 49, 0.42);
     border: 1px solid rgba(164, 190, 232, 0.1);
     box-shadow: var(--glass-highlight);
     border-radius: var(--radius-md);
     font-size: 14px;
     color: var(--color-text-muted);
-    min-height: 28px;
+    min-height: 24px;
+    list-style: none;
+}
+.track-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 16px;
+    color: var(--color-text);
+}
+.track-item:hover {
+    background: rgba(164, 190, 232, 0.08);
+}
+.track-empty {
+    font-size: 14px;
+    color: var(--color-text-muted);
+    padding: 2px;
+}
+.track-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.track-label {
+    flex: 1;
+}
+.track-ops {
+    display: inline-flex;
+    gap: 4px;
+}
+.track-ops button {
+    width: auto;
+    height: 37px;
+    box-sizing: border-box;
+    padding: 6px 16px;
+    margin-bottom: 0;
+    flex-shrink: 0;
 }
 
 /* === 按钮 === */
@@ -427,7 +478,7 @@ body::after {
     justify-content: center;
     gap: 6px;
     padding: 8px 16px;
-    border: 1px solid transparent;
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     font-family: var(--font-body);
     font-size: 16px;
@@ -440,7 +491,10 @@ body::after {
     width: 100%;
     margin-bottom: 8px;
     letter-spacing: 0.2px;
-    box-shadow: var(--glass-highlight);
+    background: rgba(20, 31, 49, 0.58);
+    box-shadow: var(--glass-highlight), 0 2px 10px rgba(0, 0, 0, 0.22);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
 }
 .btn:last-child {
     margin-bottom: 0;
@@ -452,52 +506,31 @@ body::after {
     font-size: 14px;
 }
 
-.btn-primary {
-    background: linear-gradient(135deg, rgba(59, 139, 235, 0.94), rgba(42, 111, 201, 0.86));
-    border-color: var(--color-primary);
-    box-shadow: 0 2px 8px rgba(59, 139, 235, 0.3);
-}
-.btn-primary:hover {
-    background: var(--color-primary-dark);
-    box-shadow: 0 4px 16px rgba(59, 139, 235, 0.4);
-}
-
-.btn-accent {
-    background: linear-gradient(135deg, rgba(240, 160, 48, 0.94), rgba(200, 129, 32, 0.86));
-    border-color: var(--color-accent);
-    font-weight: 600;
-    box-shadow: 0 2px 8px rgba(240, 160, 48, 0.3);
-}
-.btn-accent:hover {
-    background: var(--color-accent-dark);
-    box-shadow: 0 4px 16px rgba(240, 160, 48, 0.4);
-}
-
-.btn-success {
-    background: var(--color-success-dark);
-    border-color: var(--color-success-dark);
-}
-.btn-success:hover {
-    background: var(--color-success);
-}
-
-.btn-warning {
-    background: var(--color-warning);
-    border-color: var(--color-warning);
-}
-.btn-warning:hover {
-    background: #cf6d17;
-}
-
 .btn-outline {
-    background: rgba(255, 255, 255, 0.035);
     border-color: var(--color-border);
 }
 .btn-outline:hover {
     color: var(--color-text);
     border-color: var(--color-border-hover);
-    background: rgba(50, 71, 104, 0.58);
 }
+/* 主操作按钮：亮蓝文字，悬停提亮 */
+.btn-primary { color: var(--color-primary); }
+.btn-primary:hover { color: #5ba0f0; }
+/* 危险操作按钮：红色文字，悬停提亮 */
+.btn-danger { color: var(--color-danger); }
+.btn-danger:hover { color: #ff6b5e; }
+/* 运行按钮：绿色文字，悬停提亮 */
+.btn-success { color: var(--color-success); }
+.btn-success:hover { color: #58e68f; }
+/* 修改按钮：橙色文字，悬停提亮 */
+.btn-accent { color: var(--color-accent); }
+.btn-accent:hover { color: #ffb64d; }
+/* 推荐按钮：金色文字，悬停提亮 */
+.btn-info { color: #f5c518; }
+.btn-info:hover { color: #f8d45a; }
+/* 中断按钮：橙红文字，悬停提亮 */
+.btn-warning { color: var(--color-warning); }
+.btn-warning:hover { color: #f5963f; }
 
 .btn-sm {
     padding: 5px 10px;
@@ -520,7 +553,7 @@ body::after {
     border: 1px solid rgba(164, 190, 232, 0.1);
     box-shadow: var(--glass-highlight);
     border-radius: var(--radius-md);
-    font-size: 12px;
+    font-size: 14px;
     color: var(--color-text-muted);
     text-align: center;
 }
@@ -679,29 +712,31 @@ body::after {
 }
 .anim-frame-info {
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: 14px;
     color: var(--color-text-secondary);
     min-width: 100px;
     text-align: center;
 }
 .anim-speed-label {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--color-text-muted);
 }
 
 /* === Toast === */
 .toast-container {
     position: fixed;
-    top: 28px;
-    right: 28px;
+    top: 3%;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 10000;
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 8px;
 }
 .toast {
     padding: 12px 20px;
-    background: rgba(25, 35, 53, 0.64);
+    background: var(--color-surface-2);
     color: var(--color-text);
     border: 1px solid var(--color-border);
     border-radius: var(--glass-radius);
@@ -717,8 +752,8 @@ body::after {
 .toast.info { border-left: 3px solid var(--color-primary); }
 
 @keyframes toastIn {
-    from { opacity: 0; transform: translateX(40px); }
-    to { opacity: 1; transform: translateX(0); }
+    from { opacity: 0; transform: translateY(-16px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* === 加载遮罩 === */
@@ -751,7 +786,7 @@ body::after {
 #loading-text {
     margin-top: 16px;
     font-family: var(--font-heading);
-    font-size: 14px;
+    font-size: 16px;
     color: var(--color-text-secondary);
 }
 
@@ -771,7 +806,8 @@ body::after {
     .tab-panel,
     .chart-box,
     .anim-control-bar,
-    .toast {
+    .toast,
+    .btn {
         background: var(--color-surface-2);
     }
 }

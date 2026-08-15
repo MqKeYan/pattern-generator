@@ -5,8 +5,8 @@ import numpy as np
 import gc
 import psutil
 import os
-from models import MODEL_FUNCS, laplacian
-from config import MODEL_INIT_RANGES
+from core.models import MODEL_FUNCS, laplacian
+from core.config import MODEL_INIT_RANGES
 
 class PatternSimulator:
     """斑图模拟器 - 负责执行二维斑图的演化计算"""
