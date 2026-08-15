@@ -58,9 +58,13 @@ except ImportError:
     input("按回车键退出...")
     sys.exit(1)
 
-from server import app, client_cache, simulator
+from web.server import app, client_cache, simulator
 from waitress import serve
 from version import VERSION
+from port_check import show_port_status, kill_port_processes
+
+# 服务端口
+PORT = 5000
 
 # 全局缓存清理标记
 _cleaned = False
@@ -97,16 +101,25 @@ if __name__ == '__main__':
     lan_ip = next((ip for ip in ips if ip.startswith(('192.168.', '10.'))
                    or (ip.startswith('172.') and 16 <= int(ip.split('.')[1]) <= 31)), '未知')
 
+    # 检查端口占用情况，让用户决定是否清理
+    occupied = show_port_status(PORT)
+    if occupied:
+        choice = input("是否清理这些占用进程后启动？(y/n): ").strip().lower()
+        if choice == 'y':
+            kill_port_processes(occupied)
+        else:
+            print("跳过清理，直接启动")
+
     print("=" * 60)
     print(f"  斑图形成可视化系统 v{VERSION}")
-    print(f"  本机访问: http://localhost:5000")
-    print(f"  局域网访问: http://{lan_ip}:5000")
+    print(f"  本机访问: http://localhost:{PORT}")
+    print(f"  局域网访问: http://{lan_ip}:{PORT}")
     print("  按 Ctrl+C 停止服务器")
     print("=" * 60)
 
     try:
         # threads=8 支持多用户同时访问，计算由锁串行
-        serve(app, host='0.0.0.0', port=5000, threads=8)
+        serve(app, host='0.0.0.0', port=PORT, threads=8)
     except KeyboardInterrupt:
         pass
     finally:
