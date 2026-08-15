@@ -90,8 +90,8 @@ print(f"[spec] 将排除: {len(_whitelist_excludes)} 个无关第三方模块")
 # 数据文件
 # ============================================================
 ADDED_DATAS = [
-    (os.path.join(PROJECT_ROOT, 'src', 'templates'), 'src/templates'),
-    (os.path.join(PROJECT_ROOT, 'src', 'static'), 'src/static'),
+    (os.path.join(PROJECT_ROOT, 'src', 'web', 'templates'), 'src/web/templates'),
+    (os.path.join(PROJECT_ROOT, 'src', 'web', 'static'), 'src/web/static'),
 ]
 
 # 应用名称（小写）
@@ -136,7 +136,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(PROJECT_ROOT, 'src', 'static', 'favicon.ico'),
+    icon=os.path.join(PROJECT_ROOT, 'src', 'web', 'static', 'favicon.ico'),
 )
 
 coll = COLLECT(
