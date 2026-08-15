@@ -102,7 +102,7 @@ src/                                 # 软件代码
 │   ├── server.py                    # Flask Web 服务 — API + 页面路由
 │   ├── static/
 │   │   ├── css/style.css            # 深色科技风主题样式
-│   │   ├── fonts/NotoSansCJK-VF.otf.ttc # 本地思源黑体可变字体（界面字体）
+│   │   ├── fonts/NotoSansCJK-VF.otf.ttc # 思源黑体可变字体
 │   │   ├── js/app.js                # 前端逻辑 — Plotly.js 图表渲染
 │   │   ├── js/i18n.js               # 国际化翻译模块
 │   │   ├── js/plotly.min.js         # 本地 Plotly.js 库
