@@ -25,9 +25,9 @@
   Note: The interface language is machine-translated. If you find any inaccuracies, feel free to report them in the <a href="https://github.com/MqKeYan/pattern-generator/issues">Issues</a>.
 </p>
 
-<p align="center">
-  <strong> 5 predator-prey reaction-diffusion models, GPU-accelerated simulations, and interactive visualization of pattern formation including spiral waves, spots, and stripes </strong>
-</p>
+## Introduction
+
+Pattern Generator is a visualization tool based on reaction-diffusion equations, designed to simulate and observe the spatiotemporal dynamics of predator-prey populations in ecosystems. It includes 5 classic reaction-diffusion models and leverages PyTorch CUDA for GPU acceleration, enabling rapid generation of typical patterns such as spiral waves, spots, and stripes. It offers multiple visualization forms including 2D heatmaps, 3D surface plots, and time evolution curves, along with frame-by-frame playback of pattern evolution animations.
 
 ## Overview
 
