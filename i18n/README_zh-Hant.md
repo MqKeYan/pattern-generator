@@ -5,6 +5,14 @@
 </h1>
 
 <p align="center">
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue"></a>
+  <a href="#"><img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white"></a>
+  <a href="#"><img src="https://img.shields.io/badge/Flask-3.0+-000000?logo=flask&logoColor=white"></a>
+  <a href="#"><img src="https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white"></a>
+  <a href="#"><img src="https://img.shields.io/badge/Plotly.js-2.32+-3F4F75?logo=plotly&logoColor=white"></a>
+</p>
+
+<p align="center">
   Languages:
   <a href="../README.md"> 简体中文 </a> ·
   <a href="./README_en.md"> English </a> ·
@@ -15,14 +23,6 @@
 
 <p align="center">
   提示：軟體介面語言由機器翻譯產生，如有不準確之處，歡迎在 <a href="https://github.com/MqKeYan/pattern-generator/issues">Issues</a> 中提出。
-</p>
-
-<p align="center">
-  <a href="../LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Flask-3.0+-000000?logo=flask&logoColor=white"></a>
-  <a href="#"><img src="https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Plotly.js-2.32+-3F4F75?logo=plotly&logoColor=white"></a>
 </p>
 
 <p align="center">
