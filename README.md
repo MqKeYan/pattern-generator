@@ -5,7 +5,20 @@
 </h1>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue"></a>
+  Languages:
+  <a href="./README.md"> 简体中文 </a> ·
+  <a href="./i18n/README_en.md"> English </a> ·
+  <a href="./i18n/README_zh-Hant.md"> 繁體中文 </a> ·
+  <a href="./i18n/README_ja.md"> 日本語 </a> ·
+  <a href="./i18n/README_ko.md"> 한국어 </a>
+</p>
+
+<p align="center">
+  <sub>提示：软件界面语言由机器翻译生成，如有不准确之处，欢迎在 <a href="../../issues">Issues</a> 中提出。</sub>
+</p>
+
+<p align="center">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue"></a>
   <a href="#"><img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white"></a>
   <a href="#"><img src="https://img.shields.io/badge/Flask-3.0+-000000?logo=flask&logoColor=white"></a>
   <a href="#"><img src="https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white"></a>
@@ -20,7 +33,7 @@
 
 | 功能 | 说明 |
 |------|------|
-|  GPU 加速 | PyTorch CUDA 后端，比纯 CPU 快数十倍 |
+|  GPU 加速 | PyTorch CUDA 后端 |
 |  多维可视化 | Plotly.js 二维热力图 / 三维表面图 / 时间演化曲线 |
 |  动画演化 | 逐帧播放斑图演化过程，支持暂停、调速、帧跳转 |
 |  参数调优 | 7-8 个参数自由调节，实时切换模型，一键重置默认值 |
