@@ -111,6 +111,7 @@ src/                                 # 软件代码
 │   ├── models.py                    # 5 种反应扩散方程 + 拉普拉斯算子
 │   ├── simulation.py                # 模拟引擎 — 网格初始化、迭代、内存管理
 │   └── visualization.py             # 可视化数据生成 — Plotly JSON 格式
+├── port_check.py                    # 端口占用检查
 ├── web/                             # Web 服务层
 │   ├── server.py                    # Flask Web 服务 — API + 页面路由
 │   ├── static/

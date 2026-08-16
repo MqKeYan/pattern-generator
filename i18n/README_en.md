@@ -111,6 +111,7 @@ src/                                 # Source code
 │   ├── models.py                    # 5 reaction-diffusion equations + Laplacian operator
 │   ├── simulation.py                # Simulation engine — grid initialization, iteration, memory management
 │   └── visualization.py             # Visualization data generation — Plotly JSON format
+├── port_check.py                    # Port occupancy check
 ├── web/                             # Web service layer
 │   ├── server.py                    # Flask web service — API + page routing
 │   ├── static/
