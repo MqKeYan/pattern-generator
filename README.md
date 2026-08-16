@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <sub>提示：软件界面语言由机器翻译生成，如有不准确之处，欢迎在 <a href="../../issues">Issues</a> 中提出。</sub>
+  提示：软件界面语言由机器翻译生成，如有不准确之处，欢迎在 <a href="../../issues">Issues</a> 中提出。
 </p>
 
 <p align="center">

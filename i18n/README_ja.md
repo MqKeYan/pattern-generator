@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <sub>注意：インターフェースの言語は機械翻訳です。不正確な箇所があれば、<a href="https://github.com/MqKeYan/pattern-generator/issues">Issues</a> でお知らせください。</sub>
+  注意：インターフェースの言語は機械翻訳です。不正確な箇所があれば、<a href="https://github.com/MqKeYan/pattern-generator/issues">Issues</a> でお知らせください。
 </p>
 
 <p align="center">

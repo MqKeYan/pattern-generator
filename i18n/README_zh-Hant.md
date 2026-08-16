@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <sub>提示：軟體介面語言由機器翻譯產生，如有不準確之處，歡迎在 <a href="https://github.com/MqKeYan/pattern-generator/issues">Issues</a> 中提出。</sub>
+  提示：軟體介面語言由機器翻譯產生，如有不準確之處，歡迎在 <a href="https://github.com/MqKeYan/pattern-generator/issues">Issues</a> 中提出。
 </p>
 
 <p align="center">

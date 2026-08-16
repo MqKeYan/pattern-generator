@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <sub>Note: The interface language is machine-translated. If you find any inaccuracies, feel free to report them in the <a href="https://github.com/MqKeYan/pattern-generator/issues">Issues</a>.</sub>
+  Note: The interface language is machine-translated. If you find any inaccuracies, feel free to report them in the <a href="https://github.com/MqKeYan/pattern-generator/issues">Issues</a>.
 </p>
 
 <p align="center">

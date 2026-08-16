@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <sub>참고: 인터페이스 언어는 기계 번역으로 생성되었습니다. 부정확한 부분이 있으면 <a href="https://github.com/MqKeYan/pattern-generator/issues">Issues</a>에서 알려주세요.</sub>
+  참고: 인터페이스 언어는 기계 번역으로 생성되었습니다. 부정확한 부분이 있으면 <a href="https://github.com/MqKeYan/pattern-generator/issues">Issues</a>에서 알려주세요.
 </p>
 
 <p align="center">
