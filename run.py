@@ -96,8 +96,8 @@ if __name__ == '__main__':
         signal.signal(signal.SIGTERM, signal_handler)
 
     # 获取本机局域网IP（匹配RFC 1918私网地址）
-    out = subprocess.run(['ipconfig'], capture_output=True, text=True, encoding='gbk').stdout
-    ips = [w for l in out.split('\n') for w in l.split() if w.count('.') == 3]
+    out = subprocess.run(['ipconfig'], capture_output=True, text=True, encoding='gbk', errors='ignore').stdout
+    ips = [w for l in (out or '').split('\n') for w in l.split() if w.count('.') == 3]
     lan_ip = next((ip for ip in ips if ip.startswith(('192.168.', '10.'))
                    or (ip.startswith('172.') and 16 <= int(ip.split('.')[1]) <= 31)), '未知')
 

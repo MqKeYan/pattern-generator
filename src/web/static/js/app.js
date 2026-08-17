@@ -165,6 +165,108 @@ async function apiCall(url, data) {
 }
 
 /**
+ * 设置自定义下拉组件的选中值
+ * @param {Element} customSelect - 自定义下拉组件
+ * @param {string} value - 选中的值
+ */
+function setCustomSelectValue(customSelect, value) {
+    const optionItems = customSelect.querySelectorAll('.custom-select-option');
+    const selectedText = customSelect.querySelector('.selected-text');
+    const target = customSelect.querySelector(`.custom-select-option[data-value="${value}"]`);
+    if (target) {
+        optionItems.forEach(opt => opt.classList.remove('selected'));
+        target.classList.add('selected');
+        selectedText.textContent = target.textContent;
+        customSelect.value = value;
+    }
+}
+
+/**
+ * 绑定自定义下拉组件事件
+ * @param {Element} customSelect - 自定义下拉组件
+ */
+function bindCustomSelect(customSelect) {
+    if (customSelect.dataset.bound) return;
+    customSelect.dataset.bound = '1';
+
+    const trigger = customSelect.querySelector('.custom-select-trigger');
+    const options = customSelect.querySelector('.custom-select-options');
+    const optionItems = customSelect.querySelectorAll('.custom-select-option');
+    const selectedText = trigger.querySelector('.selected-text');
+    // 记录触发器引用（options 移入 body 后，关闭时需用它移除 active 类）
+    options._trigger = trigger;
+
+    // 打开下拉：移入 body 脱离卡片 stacking context，fixed 定位到触发器下方
+    function openOptions() {
+        document.body.appendChild(options);
+        const rect = trigger.getBoundingClientRect();
+        options.style.position = 'fixed';
+        options.style.left = rect.left + 'px';
+        options.style.top = (rect.bottom + 4) + 'px';
+        options.style.width = rect.width + 'px';
+        options.style.maxHeight = (window.innerHeight - rect.bottom - 8) + 'px';
+        options.style.marginTop = '0';
+        options.classList.add('show');
+        trigger.classList.add('active');
+    }
+
+    // 关闭下拉
+    function closeOptions() {
+        options.classList.remove('show');
+        trigger.classList.remove('active');
+    }
+
+    // 点击触发器显示/隐藏选项
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // 关闭其他下拉
+        $$('.custom-select-options.show').forEach(otherOptions => {
+            if (otherOptions !== options) {
+                otherOptions.classList.remove('show');
+                if (otherOptions._trigger) otherOptions._trigger.classList.remove('active');
+            }
+        });
+        if (options.classList.contains('show')) closeOptions();
+        else openOptions();
+    });
+
+    // 点击选项
+    optionItems.forEach(option => {
+        option.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // 更新选中状态
+            optionItems.forEach(opt => opt.classList.remove('selected'));
+            option.classList.add('selected');
+            // 更新显示文本
+            selectedText.textContent = option.textContent;
+            // 触发 change 事件
+            customSelect.value = option.dataset.value;
+            customSelect.dispatchEvent(new Event('change'));
+            closeOptions();
+        });
+    });
+
+    // 滚动时关闭（fixed 位置基于视口，滚动后位置会错位）
+    window.addEventListener('scroll', () => {
+        if (options.classList.contains('show')) closeOptions();
+    }, true);
+}
+
+/**
+ * 初始化所有自定义下拉组件
+ */
+function initCustomSelect() {
+    $$('.custom-select').forEach(bindCustomSelect);
+    // 点击外部关闭所有下拉
+    document.addEventListener('click', () => {
+        $$('.custom-select-options.show').forEach(options => {
+            options.classList.remove('show');
+            if (options._trigger) options._trigger.classList.remove('active');
+        });
+    });
+}
+
+/**
  * 初始化应用
  * 加载配置、恢复设置、初始化UI
  */
@@ -189,21 +291,25 @@ async function init() {
 
         // 构建模型选择器（模型名按语言翻译）
         const select = $('#model-select');
-        select.innerHTML = Object.keys(config.models).map(m =>
-            `<option value="${m}">${i18n.t('model_' + m.replace('模型', ''))}</option>`
+        const optionsBox = select.querySelector('.custom-select-options');
+        optionsBox.innerHTML = Object.keys(config.models).map(m =>
+            `<div class="custom-select-option" data-value="${m}" data-i18n="model_${m.replace('模型', '')}">${i18n.t('model_' + m.replace('模型', ''))}</div>`
         ).join('');
 
         // 恢复本地设置
         const saved = loadSettings();
-        if (saved) {
-            if (saved.model) {
-                // 保存并设置模型值
-                state.currentModel = saved.model;
-                select.value = saved.model;
-            }
-            if (saved.trackPoints) state.trackPoints = saved.trackPoints;
-            updateTrackList();
+        if (saved && saved.model) {
+            // 保存并设置模型值
+            state.currentModel = saved.model;
+            setCustomSelectValue(select, saved.model);
+        } else {
+            // 无保存设置时默认选择第一个模型
+            const firstModel = Object.keys(config.models)[0];
+            state.currentModel = firstModel;
+            setCustomSelectValue(select, firstModel);
         }
+        if (saved && saved.trackPoints) state.trackPoints = saved.trackPoints;
+        updateTrackList();
 
         // 加载模型参数面板
         onModelChange();
@@ -1141,10 +1247,144 @@ function bindEvents() {
         try {
             const resp = await apiCall('/api/cleanup', {});
             showToast(resp.message, 'success');
+            location.reload();
         } catch (err) {
             showToast(i18n.t('clean_failed', { msg: err.message }), 'error');
         }
     });
+
+    // 软件设置弹窗
+    const settingsModal = $('#settings-modal');
+    const modalContent = $('#modal-content');
+    const modalHeader = $('.modal-header');
+    const languageSelect = $('#language-select');
+    const portInput = $('#port-input');
+
+    // 初始化自定义下拉组件
+    initCustomSelect();
+
+    // 弹窗拖动功能（fixed 定位，left/top 为视口坐标）
+    // savedModalPos 记录拖动位置：弹窗关闭重开恢复位置；刷新/软件重启后内存清空，恢复默认居中
+    let isDragging = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    let savedModalPos = null;
+
+    modalHeader.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;  // 仅左键拖动
+        isDragging = true;
+        const rect = modalContent.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+        modalContent.style.cursor = 'grabbing';
+        e.preventDefault();  // 防止拖动时选中文字
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const left = e.clientX - dragOffsetX;
+        const top = e.clientY - dragOffsetY;
+        modalContent.style.left = left + 'px';
+        modalContent.style.top = top + 'px';
+        modalContent.style.transform = 'none';  // 取消居中 transform，避免双重偏移
+        savedModalPos = { left, top };  // 记住拖动位置
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            modalHeader.style.cursor = 'move';
+        }
+    });
+
+    // 打开设置弹窗
+    $('#software-settings').addEventListener('click', () => {
+        // 有拖动记录则恢复位置，否则恢复默认居中
+        if (savedModalPos) {
+            modalContent.style.left = savedModalPos.left + 'px';
+            modalContent.style.top = savedModalPos.top + 'px';
+            modalContent.style.transform = 'none';
+        } else {
+            modalContent.style.left = '';
+            modalContent.style.top = '';
+            modalContent.style.transform = '';
+        }
+        // 加载保存的设置
+        const savedLang = localStorage.getItem('app_language') || i18n.getLang();
+        const savedPort = localStorage.getItem('app_port') || 5000;
+
+        // 设置自定义下拉组件的值
+        setCustomSelectValue(languageSelect, savedLang);
+
+        portInput.value = savedPort;
+        settingsModal.classList.add('show');
+    });
+
+    // 关闭设置弹窗
+    $('#settings-cancel').addEventListener('click', () => {
+        settingsModal.classList.remove('show');
+    });
+
+    // 点击遮罩关闭弹窗
+    settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+            settingsModal.classList.remove('show');
+        }
+    });
+
+    // 保存设置
+    $('#settings-save').addEventListener('click', () => {
+        const newLang = languageSelect.value;
+        const newPort = parseInt(portInput.value);
+
+        if (newPort < 1024 || newPort > 65535) {
+            showToast('端口范围: 1024-65535', 'error');
+            return;
+        }
+
+        // 保存语言设置
+        i18n.setLang(newLang);
+        // 保存端口设置
+        localStorage.setItem('app_port', newPort);
+
+        showToast(i18n.t('reset_done'), 'success');
+        settingsModal.classList.remove('show');
+    });
+
+    // 恢复默认设置
+    $('#restore-default').addEventListener('click', () => {
+        // 恢复默认语言（检测系统语言）
+        const defaultLang = detectSystemLang();
+        // 恢复默认端口
+        const defaultPort = 5000;
+
+        // 设置自定义下拉组件的值
+        setCustomSelectValue(languageSelect, defaultLang);
+
+        portInput.value = defaultPort;
+
+        // 清除保存的设置
+        localStorage.removeItem('app_language');
+        localStorage.removeItem('app_port');
+
+        // 应用默认语言
+        i18n.setLang(defaultLang);
+
+        showToast(i18n.t('reset_done'), 'success');
+        settingsModal.classList.remove('show');
+    });
+
+    // 检测系统语言（辅助函数）
+    function detectSystemLang() {
+        const nav = (navigator.language || 'zh-CN').toLowerCase();
+        if (nav.startsWith('zh')) {
+            if (nav.startsWith('zh-tw') || nav.startsWith('zh-hk') || nav.startsWith('zh-mo')) return 'zh-TW';
+            return 'zh-CN';
+        }
+        if (nav.startsWith('ja')) return 'ja';
+        if (nav.startsWith('ko')) return 'ko';
+        return 'en';
+    }
 
     // 标签切换
     $$('.tab-btn').forEach(btn => {

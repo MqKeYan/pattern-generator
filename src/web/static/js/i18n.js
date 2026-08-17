@@ -1,6 +1,6 @@
 /**
  * i18n 翻译模块 - 根据操作系统语言自动适配界面文字
- * 支持：简体中文(默认)、繁体中文、英文（非中文系统一律显示英文）
+ * 支持：简体中文(默认)、繁体中文、英文、日语、韩语（其他语言一律显示英文）
  */
 const i18n = (() => {
     // 翻译字典
@@ -16,7 +16,7 @@ const i18n = (() => {
             x_max: 'X 最大值',
             y_min: 'Y 最小值',
             y_max: 'Y 最大值',
-            apply_best_init: '应用最佳初始值',
+            apply_best_init: '应用推荐值',
             track_points: '时间演化跟踪点',
             coord_x: 'X坐标',
             coord_y: 'Y坐标',
@@ -25,7 +25,7 @@ const i18n = (() => {
             edit: '编辑',
             delete: '删除',
             iterations: '迭代次数',
-            reset_iters: '重置推荐值',
+            reset_iters: '应用推荐值',
             anim_setting: '动画设置',
             anim_start: '起始迭代',
             anim_end: '结束迭代',
@@ -35,6 +35,18 @@ const i18n = (() => {
             run_anim: '动画模拟',
             reset_all: '重置所有',
             clean_cache: '清理缓存',
+            software_settings: '软件设置',
+            language: '语言',
+            port: '端口',
+            port_hint: '修改端口需重启服务器生效',
+            language_zh_cn: '简体中文',
+            language_zh_tw: '繁体中文',
+            language_en: '英文',
+            language_ja: '日语',
+            language_ko: '韩语',
+            restore_default: '恢复默认',
+            save: '保存',
+            cancel: '取消',
             status_ready: '就绪，请选择参数运行模拟',
             tab_2d: '二维斑图',
             tab_3d: '三维斑图',
@@ -95,7 +107,7 @@ const i18n = (() => {
             x_max: 'X 最大值',
             y_min: 'Y 最小值',
             y_max: 'Y 最大值',
-            apply_best_init: '套用最佳初始值',
+            apply_best_init: '套用推荐值',
             track_points: '時間演化追蹤點',
             coord_x: 'X座標',
             coord_y: 'Y座標',
@@ -104,7 +116,7 @@ const i18n = (() => {
             edit: '編輯',
             delete: '刪除',
             iterations: '疊代次數',
-            reset_iters: '重置建議值',
+            reset_iters: '應用建議值',
             anim_setting: '動畫設置',
             anim_start: '起始疊代',
             anim_end: '結束疊代',
@@ -114,6 +126,18 @@ const i18n = (() => {
             run_anim: '動畫模擬',
             reset_all: '全部重置',
             clean_cache: '清理快取',
+            software_settings: '軟件設置',
+            language: '語言',
+            port: '端口',
+            port_hint: '修改端口需重啟服務器生效',
+            language_zh_cn: '簡體中文',
+            language_zh_tw: '繁體中文',
+            language_en: '英文',
+            language_ja: '日語',
+            language_ko: '韓語',
+            restore_default: '恢復默認',
+            save: '保存',
+            cancel: '取消',
             status_ready: '就緒，請選擇參數執行模擬',
             tab_2d: '二維斑圖',
             tab_3d: '三維斑圖',
@@ -174,7 +198,7 @@ const i18n = (() => {
             x_max: 'X Max',
             y_min: 'Y Min',
             y_max: 'Y Max',
-            apply_best_init: 'Apply Best Initial Values',
+            apply_best_init: 'Apply Recommended',
             track_points: 'Evolution Tracking Points',
             coord_x: 'X Coordinate',
             coord_y: 'Y Coordinate',
@@ -183,7 +207,7 @@ const i18n = (() => {
             edit: 'Edit',
             delete: 'Delete',
             iterations: 'Iterations',
-            reset_iters: 'Reset Recommended',
+            reset_iters: 'Apply Recommended',
             anim_setting: 'Animation Settings',
             anim_start: 'Start Iteration',
             anim_end: 'End Iteration',
@@ -193,6 +217,18 @@ const i18n = (() => {
             run_anim: 'Animation Simulation',
             reset_all: 'Reset All',
             clean_cache: 'Clear Cache',
+            software_settings: 'Software Settings',
+            language: 'Language',
+            port: 'Port',
+            port_hint: 'Port changes require server restart',
+            language_zh_cn: 'Simplified Chinese',
+            language_zh_tw: 'Traditional Chinese',
+            language_en: 'English',
+            language_ja: 'Japanese',
+            language_ko: 'Korean',
+            restore_default: 'Restore Default',
+            save: 'Save',
+            cancel: 'Cancel',
             status_ready: 'Ready, select parameters to run',
             tab_2d: '2D Pattern',
             tab_3d: '3D Pattern',
@@ -242,10 +278,192 @@ const i18n = (() => {
             model_4: 'Model 4·Symmetric Competition',
             model_5: 'Model 5·Continuous-Discrete',
         },
+        'ja': {
+            app_title: 'パターン形成可視化システム',
+            loading: '読み込み中...',
+            model_select: 'モデル選択',
+            params_setting: 'パラメータ設定',
+            reset_params: 'パラメータをリセット',
+            init_range: '初期値範囲',
+            x_min: 'X 最小値',
+            x_max: 'X 最大値',
+            y_min: 'Y 最小値',
+            y_max: 'Y 最大値',
+            apply_best_init: '推奨値を適用',
+            track_points: '時間発展トラッキングポイント',
+            coord_x: 'X座標',
+            coord_y: 'Y座標',
+            add: '追加',
+            clear: 'クリア',
+            edit: '編集',
+            delete: '削除',
+            iterations: '反復回数',
+            reset_iters: '推奨値を適用',
+            anim_setting: 'アニメーション設定',
+            anim_start: '開始反復',
+            anim_end: '終了反復',
+            anim_frames: 'フレーム数',
+            control_panel: 'コントロールパネル',
+            run_sim: 'シミュレーション実行',
+            run_anim: 'アニメーション実行',
+            reset_all: 'すべてリセット',
+            clean_cache: 'キャッシュをクリア',
+            software_settings: 'ソフトウェア設定',
+            language: '言語',
+            port: 'ポート',
+            port_hint: 'ポートの変更にはサーバーの再起動が必要です',
+            language_zh_cn: '簡体字中国語',
+            language_zh_tw: '繁体字中国語',
+            language_en: '英語',
+            language_ja: '日本語',
+            language_ko: '韓国語',
+            restore_default: 'デフォルトに戻す',
+            save: '保存',
+            cancel: 'キャンセル',
+            status_ready: '準備完了、パラメータを選択して実行してください',
+            tab_2d: '2次元パターン',
+            tab_3d: '3次元パターン',
+            tab_anim: 'アニメーション',
+            play: '再生',
+            pause: '一時停止',
+            speed: '速度',
+            computing: '計算中...',
+            point_range_error: '座標は0~99の範囲でなければなりません',
+            point_exists: '点({x},{y})は既に存在します',
+            simulating: 'シミュレーション計算中、お待ちください...',
+            simulating_status: 'シミュレーション実行中...',
+            sim_complete: 'シミュレーション完了 — {model}、反復{iters}回',
+            sim_done: 'シミュレーション完了！',
+            sim_failed: 'シミュレーション失敗: {msg}',
+            init_failed: '初期化失敗',
+            restored_sim: '前回のシミュレーション結果を復元しました',
+            restored_toast: '前回の結果を復元しました、リロード不要',
+            reset_done: 'すべての設定がリセットされました',
+            clean_failed: 'クリア失敗: {msg}',
+            need_anim: '先にアニメーション計算を実行してください',
+            anim_ready: 'アニメーションデータ準備完了',
+            anim_ready_status: 'アニメーションデータ準備完了、再生をクリック',
+            anim_failed: 'アニメーション準備失敗: {msg}',
+            anim_failed_status: 'アニメーション準備失敗',
+            anim_preparing: 'アニメーションデータを準備中...',
+            track_list_center: '現在のトラッキングポイント: 中心点(50,50)',
+            track_list_custom: '現在のトラッキングポイント: 中心点(50,50), {pts}',
+            frame_count: 'フレーム: {current} / {total}',
+            x_population: 'X個体群',
+            y_population: 'Y個体群',
+            combined_pattern: '結合パターン',
+            iterations_axis: '反復回数',
+            density_axis: '個体群密度',
+            axis_x: 'X軸',
+            axis_y: 'Y軸',
+            center_evo_title: '中心点の時間発展',
+            center_x: 'X個体群-中心点',
+            center_y: 'Y個体群-中心点',
+            density: '密度',
+            anim_title_x: 'X個体群 - 反復 {iter}',
+            anim_title_y: 'Y個体群 - 反復 {iter}',
+            anim_title_combined: '結合パターン - 反復 {iter}',
+            model_1: 'モデル1·R-M型',
+            model_2: 'モデル2·Holling II型',
+            model_3: 'モデル3·比依存型',
+            model_4: 'モデル4·対称競争',
+            model_5: 'モデル5·連続化離散型',
+        },
+        'ko': {
+            app_title: '패턴 형성 시각화 시스템',
+            loading: '로딩 중...',
+            model_select: '모델 선택',
+            params_setting: '매개변수 설정',
+            reset_params: '매개변수 초기화',
+            init_range: '초기값 범위',
+            x_min: 'X 최소값',
+            x_max: 'X 최대값',
+            y_min: 'Y 최소값',
+            y_max: 'Y 최대값',
+            apply_best_init: '권장값 적용',
+            track_points: '시간 진화 추적 지점',
+            coord_x: 'X좌표',
+            coord_y: 'Y좌표',
+            add: '추가',
+            clear: '비우기',
+            edit: '편집',
+            delete: '삭제',
+            iterations: '반복 횟수',
+            reset_iters: '권장값 적용',
+            anim_setting: '애니메이션 설정',
+            anim_start: '시작 반복',
+            anim_end: '종료 반복',
+            anim_frames: '프레임 수',
+            control_panel: '제어판',
+            run_sim: '시뮬레이션 실행',
+            run_anim: '애니메이션 실행',
+            reset_all: '전체 초기화',
+            clean_cache: '캐시 비우기',
+            software_settings: '소프트웨어 설정',
+            language: '언어',
+            port: '포트',
+            port_hint: '포트 변경 시 서버 재시작 필요',
+            language_zh_cn: '간체 중국어',
+            language_zh_tw: '번체 중국어',
+            language_en: '영어',
+            language_ja: '일본어',
+            language_ko: '한국어',
+            restore_default: '기본값 복원',
+            save: '저장',
+            cancel: '취소',
+            status_ready: '준비 완료, 매개변수를 선택하여 실행하세요',
+            tab_2d: '2D 패턴',
+            tab_3d: '3D 패턴',
+            tab_anim: '애니메이션',
+            play: '재생',
+            pause: '일시정지',
+            speed: '속도',
+            computing: '계산 중...',
+            point_range_error: '좌표는 0~99 사이여야 합니다',
+            point_exists: '점({x},{y})이 이미 존재합니다',
+            simulating: '시뮬레이션 계산 중, 잠시만 기다려주세요...',
+            simulating_status: '시뮬레이션 실행 중...',
+            sim_complete: '시뮬레이션 완료 — {model}, 반복 {iters}회',
+            sim_done: '시뮬레이션 완료!',
+            sim_failed: '시뮬레이션 실패: {msg}',
+            init_failed: '초기화 실패',
+            restored_sim: '이전 시뮬레이션 결과가 복원되었습니다',
+            restored_toast: '이전 결과가 복원되었습니다, 새로고침 불필요',
+            reset_done: '모든 설정이 초기화되었습니다',
+            clean_failed: '비우기 실패: {msg}',
+            need_anim: '먼저 애니메이션 계산을 실행하세요',
+            anim_ready: '애니메이션 데이터 준비 완료',
+            anim_ready_status: '애니메이션 데이터 준비 완료, 재생을 클릭하세요',
+            anim_failed: '애니메이션 준비 실패: {msg}',
+            anim_failed_status: '애니메이션 준비 실패',
+            anim_preparing: '애니메이션 데이터를 준비하는 중...',
+            track_list_center: '현재 추적 지점: 중심점(50,50)',
+            track_list_custom: '현재 추적 지점: 중심점(50,50), {pts}',
+            frame_count: '프레임: {current} / {total}',
+            x_population: 'X 개체군',
+            y_population: 'Y 개체군',
+            combined_pattern: '결합 패턴',
+            iterations_axis: '반복 횟수',
+            density_axis: '개체군 밀도',
+            axis_x: 'X축',
+            axis_y: 'Y축',
+            center_evo_title: '중심점 시간 진화',
+            center_x: 'X 개체군-중심점',
+            center_y: 'Y 개체군-중심점',
+            density: '밀도',
+            anim_title_x: 'X 개체군 - 반복 {iter}',
+            anim_title_y: 'Y 개체군 - 반복 {iter}',
+            anim_title_combined: '결합 패턴 - 반복 {iter}',
+            model_1: '모델1·R-M형',
+            model_2: '모델2·Holling II형',
+            model_3: '모델3·비율 의존형',
+            model_4: '모델4·대칭 경쟁',
+            model_5: '모델5·연속화 이산형',
+        },
     };
 
-    // 当前语言（zh-CN / zh-TW / en）
-    const lang = detectLang();
+    // 支持的语言列表
+    const supportedLangs = ['zh-CN', 'zh-TW', 'en', 'ja', 'ko'];
 
     /**
      * 检测系统语言
@@ -258,8 +476,14 @@ const i18n = (() => {
             if (nav.startsWith('zh-tw') || nav.startsWith('zh-hk') || nav.startsWith('zh-mo')) return 'zh-TW';
             return 'zh-CN';
         }
-        return 'en';  // 非中文系统一律显示英文
+        if (nav.startsWith('ja')) return 'ja';
+        if (nav.startsWith('ko')) return 'ko';
+        return 'en';  // 其他语言系统一律显示英文
     }
+
+    // 当前语言（zh-CN / zh-TW / en / ja / ko）
+    // 优先使用保存的语言，否则使用检测到的语言
+    let lang = localStorage.getItem('app_language') || detectLang();
 
     /**
      * 翻译函数，支持 {变量} 占位符
@@ -286,9 +510,35 @@ const i18n = (() => {
             el.textContent = t(el.dataset.i18n);
         });
         document.title = t('app_title');
+        // 同步自定义下拉组件选中项文本
+        document.querySelectorAll('.custom-select').forEach(cs => {
+            const selected = cs.querySelector('.custom-select-option.selected');
+            const text = cs.querySelector('.selected-text');
+            if (selected && text) text.textContent = selected.textContent;
+        });
     }
 
-    return { t, applyTranslations, lang };
+    /**
+     * 设置语言
+     * @param {string} newLang - 新语言代码
+     */
+    function setLang(newLang) {
+        if (supportedLangs.includes(newLang)) {
+            lang = newLang;
+            localStorage.setItem('app_language', newLang);
+            applyTranslations();
+        }
+    }
+
+    /**
+     * 获取当前语言
+     * @returns {string} 当前语言代码
+     */
+    function getLang() {
+        return lang;
+    }
+
+    return { t, applyTranslations, lang, setLang, getLang };
 })();
 
 // DOM加载完成后立即应用翻译（在app.js的init之前执行）

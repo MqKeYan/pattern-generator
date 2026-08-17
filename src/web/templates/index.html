@@ -29,13 +29,12 @@
                 <!-- 模型选择 -->
                 <section class="panel-card">
                     <h3 class="card-title" data-i18n="model_select">模型选择</h3>
-                    <select id="model-select" class="select-input">
-                        <option value="模型1" data-i18n="model_1">模型1·R-M型</option>
-                        <option value="模型2" data-i18n="model_2">模型2·Holling II型</option>
-                        <option value="模型3" data-i18n="model_3">模型3·比值依赖型</option>
-                        <option value="模型4" data-i18n="model_4">模型4·对称竞争</option>
-                        <option value="模型5" data-i18n="model_5">模型5·连续化离散型</option>
-                    </select>
+                    <div class="custom-select" id="model-select">
+                        <div class="custom-select-trigger">
+                            <span class="selected-text">模型1·R-M型</span>
+                        </div>
+                        <div class="custom-select-options"></div>
+                    </div>
                 </section>
 
                 <!-- 参数设置 -->
@@ -85,7 +84,7 @@
                         <input type="range" id="iter-range" min="100" max="50000" value="9000" class="range-input">
                         <input type="number" id="iter-value" value="9000" class="num-input num-inline">
                     </div>
-                    <button class="btn btn-outline btn-info" id="reset-iters" data-i18n="reset_iters">重置推荐值</button>
+                    <button class="btn btn-outline btn-info" id="reset-iters" data-i18n="reset_iters">应用推荐值</button>
                 </section>
 
                 <!-- 动画设置 -->
@@ -115,6 +114,9 @@
                     </button>
                     <button class="btn btn-outline btn-danger" id="clean-cache" data-i18n="clean_cache">
                         清理缓存
+                    </button>
+                    <button class="btn btn-outline btn-white" id="software-settings" data-i18n="software_settings">
+                        软件设置
                     </button>
                     <div class="status-text" id="status-msg" data-i18n="status_ready">就绪，请选择参数运行模拟</div>
                 </section>
@@ -192,5 +194,41 @@
     </script>
     <script src="/static/js/i18n.js"></script>
     <script src="/static/js/app.js"></script>
+
+    <!-- 软件设置弹窗 -->
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-content" id="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" data-i18n="software_settings">软件设置</h3>
+            </div>
+            <div class="settings-item">
+                <label data-i18n="language">语言</label>
+                <div class="custom-select" id="language-select">
+                    <div class="custom-select-trigger">
+                        <span class="selected-text">简体中文</span>
+                    </div>
+                    <div class="custom-select-options">
+                        <div class="custom-select-option selected" data-value="zh-CN" data-i18n="language_zh_cn">简体中文</div>
+                        <div class="custom-select-option" data-value="zh-TW" data-i18n="language_zh_tw">繁体中文</div>
+                        <div class="custom-select-option" data-value="en" data-i18n="language_en">英文</div>
+                        <div class="custom-select-option" data-value="ja" data-i18n="language_ja">日语</div>
+                        <div class="custom-select-option" data-value="ko" data-i18n="language_ko">韩语</div>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-item">
+                <label data-i18n="port">端口</label>
+                <input type="number" id="port-input" value="5000" min="1024" max="65535" class="num-input">
+                <span class="settings-hint" data-i18n="port_hint">修改端口需重启服务器生效</span>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline btn-danger" id="restore-default" data-i18n="restore_default">恢复默认</button>
+                <div class="modal-buttons">
+                    <button class="btn btn-outline btn-info" id="settings-cancel" data-i18n="cancel">取消</button>
+                    <button class="btn btn-outline btn-success" id="settings-save" data-i18n="save">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
