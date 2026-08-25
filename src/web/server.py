@@ -33,6 +33,7 @@ import torch
 # 模块导入
 from core.config import MODEL_CONFIGS, GRID_SIZE, MODEL_INIT_RANGES, PARAM_NAMES, MODEL_DISPLAY_NAMES
 from version import VERSION
+from settings import load_settings, update_settings
 from core.simulation import PatternSimulator
 from core.visualization import PatternVisualizer
 
@@ -56,8 +57,6 @@ app = Flask(__name__,
 use_cuda = torch.cuda.is_available()
 simulator = PatternSimulator(grid_size=GRID_SIZE, use_cuda=use_cuda)
 visualizer = PatternVisualizer()
-log.info(f"使用设备: {'CUDA' if use_cuda else 'CPU'}")
-log.info(f"计算硬件: {simulator.hardware_info}")
 
 # 客户端缓存
 client_cache = {}
@@ -76,8 +75,24 @@ def index():
         'display_names': MODEL_DISPLAY_NAMES,
         'grid_size': GRID_SIZE,
         'hardware_info': simulator.hardware_info,
+        'settings': load_settings(),
     }
     return render_template('index.html', init_config=init_config)
+
+@app.route('/api/settings', methods=['POST'])
+def save_settings():
+    """保存软件设置"""
+    try:
+        data = request.get_json() or {}
+        settings = update_settings(
+            port=data.get('port'),
+            auto_open_browser=data.get('auto_open_browser'),
+        )
+        return jsonify({'success': True, 'settings': settings})
+    except (ValueError, TypeError) as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/simulate', methods=['POST'])
 def run_simulation():

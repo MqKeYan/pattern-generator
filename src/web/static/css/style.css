@@ -901,6 +901,18 @@ body::after {
     color: var(--color-text-secondary);
     margin-bottom: 6px;
 }
+.settings-item .settings-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+.settings-checkbox input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
 .settings-item .custom-select-trigger,
 .settings-item .num-input {
     width: 100%;

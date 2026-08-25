@@ -9,7 +9,9 @@ const state = {
     animTimer: null,       // 动画计时器
     animFrame: 0,         // 当前动画帧
     animPlaying: false,   // 动画播放状态
-    clientId: '',         // 客户端ID
+    clientId: '',         // 服务器分配的客户端号
+    clientToken: '',      // 浏览器访问端令牌
+    clientName: '',       // 客户端自定义名称
     lastViz2d: null,       // 最近一次二维斑图数据
     animationRestorePromise: null, // 动画缓存恢复请求
     lastViz3d: null,       // 最近一次三维图数据（懒渲染用）
@@ -48,26 +50,26 @@ function renderAnimationPlot(id, data, layout, config) {
 }
 
 /**
- * 获取客户端ID
- * 区分页面刷新和重新打开，确保唯一性
+ * 获取访问端令牌
+ * 令牌持久保存在浏览器中，用于识别同一访问端
  */
-function getClientId() {
-    // 使用sessionStorage判断是刷新还是重开
-    const isReopen = !sessionStorage.getItem('_active');
-    sessionStorage.setItem('_active', '1');
-
-    if (isReopen) {
-        // 关闭后重开：清除旧缓存，生成新ID
-        localStorage.removeItem('client_id');
-        localStorage.removeItem('app_settings');
+function getClientToken() {
+    let token = localStorage.getItem('client_token') || localStorage.getItem('client_id');
+    if (!token) {
+        token = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+        localStorage.setItem('client_token', token);
     }
+    return token;
+}
 
-    let cid = localStorage.getItem('client_id');
-    if (!cid) {
-        cid = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
-        localStorage.setItem('client_id', cid);
-    }
-    return cid;
+/**
+ * 更新客户端信息显示
+ */
+function updateClientBadge() {
+    const identity = state.clientName || state.clientId;
+    const clientValue = $('#client-value');
+    clientValue.textContent = identity;
+    clientValue.removeAttribute('data-i18n');
 }
 
 /**
@@ -271,7 +273,9 @@ function initCustomSelect() {
  * 加载配置、恢复设置、初始化UI
  */
 async function init() {
-    state.clientId = getClientId();
+    state.clientToken = getClientToken();
+    state.clientId = state.clientToken;
+    state.clientName = localStorage.getItem('client_name') || '';
 
     try {
         // 同步读取服务端内联配置，刷新首帧即渲染完整侧边栏
@@ -282,12 +286,15 @@ async function init() {
         state.initRanges = config.init_ranges;
         state.paramNames = config.param_names;
         state.modelDisplayNames = config.display_names || {};
+        state.appSettings = config.settings || { port: 5000, auto_open_browser: true };
 
-        // 硬件信息：去掉 GPU:/CPU: 前缀，统一显示"计算硬件: 型号"
-        $('#hardware-badge').textContent = '计算硬件: ' + config.hardware_info.replace(/^(GPU|CPU):\s*/, '');
+        // 硬件名称由翻译标签显示，型号作为动态值单独更新
+        const hardwareValue = $('#hardware-value');
+        hardwareValue.textContent = config.hardware_info.replace(/^(GPU|CPU):\s*/, '');
+        hardwareValue.removeAttribute('data-i18n');
 
         // 客户端名称
-        $('#client-badge').textContent = '客户端: ' + state.clientId;
+        updateClientBadge();
 
         // 构建模型选择器（模型名按语言翻译）
         const select = $('#model-select');
@@ -758,6 +765,9 @@ function render2DPatterns(vizData) {
         line: { color: c.color, width: c.line_width, dash: c.dash },
         visible: c.visible ? true : 'legendonly',
     }));
+    const curveXValues = curveTraces.flatMap(c => c.x).filter(Number.isFinite);
+    const xMin = curveXValues.length ? Math.min(...curveXValues) : 0;
+    const xMax = curveXValues.length ? Math.max(...curveXValues) : 0;
 
     Plotly.newPlot('chart-evolution', curveTraces, {
         title: { text: evolution.title, font: { size: 15, color: colors.text } },
@@ -765,10 +775,25 @@ function render2DPatterns(vizData) {
         plot_bgcolor: 'rgba(0, 0, 0, 0)',
         font: { color: colors.secondary, size: 11 },
         margin: { l: 60, r: 30, t: 40, b: 60 },
-        xaxis: { title: i18n.t('iterations_axis'), gridcolor: colors.grid, zeroline: false },
-        yaxis: { title: i18n.t('density_axis'), gridcolor: colors.grid, zeroline: false },
+        dragmode: 'pan',
+        yaxis: { title: i18n.t('density_axis'), gridcolor: colors.grid, zeroline: false, fixedrange: true },
         legend: { font: { size: 9 }, bgcolor: 'rgba(0, 0, 0, 0)', bordercolor: colors.border },
         hovermode: 'closest',
+        xaxis: {
+            title: i18n.t('iterations_axis'),
+            gridcolor: colors.grid,
+            zeroline: false,
+            minallowed: xMin,
+            maxallowed: xMax,
+            // 使用双端范围条调整曲线的显示起点和终点
+            rangeslider: {
+                visible: true,
+                thickness: 0.06,
+                bgcolor: 'rgba(25, 35, 53, 0.72)',
+                bordercolor: colors.border,
+                borderwidth: 1,
+            },
+        },
     }, { responsive: true, displayModeBar: false });
 }
 
@@ -1162,6 +1187,16 @@ function switchTab(tabId) {
  * 绑定事件监听器
  */
 function bindEvents() {
+    // Plotly范围条释放事件偶尔落到覆盖层之外，兜底清理残留拖动态
+    function releasePlotlyDrag(event) {
+        const dragCover = $('.dragcover');
+        if (!dragCover || event?.target === dragCover) return;
+        dragCover.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    }
+    document.addEventListener('mouseup', releasePlotlyDrag);
+    document.addEventListener('pointerup', releasePlotlyDrag);
+    window.addEventListener('blur', () => releasePlotlyDrag());
+
     // 所有数字输入框：失去焦点时自动去前导零
     document.addEventListener('change', (e) => {
         if (e.target.type === 'number' && e.target.value) {
@@ -1206,7 +1241,15 @@ function bindEvents() {
         const val = parseInt($('#iter-value').value);
         const min = parseInt($('#iter-range').min);
         const max = parseInt($('#iter-range').max);
-        if (val >= min && val <= max) {
+        if (val > max) {
+            // 超出上限时弹窗提醒并自动修正为上限
+            showToast(i18n.t('iter_max_warning', { max }), 'error');
+            $('#iter-value').value = max;
+            $('#iter-range').value = max;
+        } else if (val < min) {
+            $('#iter-value').value = min;
+            $('#iter-range').value = min;
+        } else {
             $('#iter-range').value = val;
         }
         saveSettings();
@@ -1259,6 +1302,8 @@ function bindEvents() {
     const modalHeader = $('.modal-header');
     const languageSelect = $('#language-select');
     const portInput = $('#port-input');
+    const clientNameInput = $('#client-name-input');
+    const autoOpenBrowserInput = $('#auto-open-browser');
 
     // 初始化自定义下拉组件
     initCustomSelect();
@@ -1311,12 +1356,14 @@ function bindEvents() {
         }
         // 加载保存的设置
         const savedLang = localStorage.getItem('app_language') || i18n.getLang();
-        const savedPort = localStorage.getItem('app_port') || 5000;
+        const savedPort = state.appSettings.port || 5000;
 
         // 设置自定义下拉组件的值
         setCustomSelectValue(languageSelect, savedLang);
 
         portInput.value = savedPort;
+        clientNameInput.value = state.clientName || state.clientId;
+        autoOpenBrowserInput.checked = state.appSettings.auto_open_browser;
         settingsModal.classList.add('show');
     });
 
@@ -1333,26 +1380,43 @@ function bindEvents() {
     });
 
     // 保存设置
-    $('#settings-save').addEventListener('click', () => {
+    $('#settings-save').addEventListener('click', async () => {
         const newLang = languageSelect.value;
         const newPort = parseInt(portInput.value);
+        const enteredClientName = clientNameInput.value.trim();
+        const newClientName = enteredClientName === state.clientId ? '' : enteredClientName;
 
-        if (newPort < 1024 || newPort > 65535) {
+        if (!Number.isInteger(newPort) || newPort < 1024 || newPort > 65535) {
             showToast('端口范围: 1024-65535', 'error');
             return;
         }
+        if (newClientName.length > 40) {
+            showToast('客户端名称不能超过40个字符', 'error');
+            return;
+        }
 
-        // 保存语言设置
-        i18n.setLang(newLang);
-        // 保存端口设置
-        localStorage.setItem('app_port', newPort);
+        try {
+            const settingsResp = await apiCall('/api/settings', {
+                port: newPort,
+                auto_open_browser: autoOpenBrowserInput.checked,
+            });
+            state.appSettings = settingsResp.settings;
+            state.clientName = newClientName;
+            localStorage.setItem('client_name', newClientName);
+            i18n.setLang(newLang);
+            localStorage.setItem('app_port', newPort);
+            updateClientBadge();
+        } catch (err) {
+            showToast(err.message, 'error');
+            return;
+        }
 
         showToast(i18n.t('reset_done'), 'success');
         settingsModal.classList.remove('show');
     });
 
     // 恢复默认设置
-    $('#restore-default').addEventListener('click', () => {
+    $('#restore-default').addEventListener('click', async () => {
         // 恢复默认语言（检测系统语言）
         const defaultLang = detectSystemLang();
         // 恢复默认端口
@@ -1362,13 +1426,27 @@ function bindEvents() {
         setCustomSelectValue(languageSelect, defaultLang);
 
         portInput.value = defaultPort;
+        clientNameInput.value = '';
+        autoOpenBrowserInput.checked = true;
 
         // 清除保存的设置
         localStorage.removeItem('app_language');
         localStorage.removeItem('app_port');
 
-        // 应用默认语言
-        i18n.setLang(defaultLang);
+        try {
+            const resp = await apiCall('/api/settings', {
+                port: defaultPort,
+                auto_open_browser: true,
+            });
+            state.appSettings = resp.settings;
+            state.clientName = '';
+            localStorage.removeItem('client_name');
+            i18n.setLang(defaultLang);
+            updateClientBadge();
+        } catch (err) {
+            showToast(err.message, 'error');
+            return;
+        }
 
         showToast(i18n.t('reset_done'), 'success');
         settingsModal.classList.remove('show');

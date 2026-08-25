@@ -20,8 +20,14 @@
             <div class="sidebar-header">
                 <h1 class="app-title" data-i18n="app_title">斑图形成可视化系统</h1>
                 <div class="client-card">
-                    <div class="hardware-badge" id="hardware-badge" data-i18n="loading">加载中...</div>
-                    <div class="client-badge" id="client-badge" data-i18n="loading">加载中...</div>
+                    <div class="hardware-badge" id="hardware-badge">
+                        <span data-i18n="hardware_label">计算硬件</span>:
+                        <span id="hardware-value" data-i18n="loading">加载中...</span>
+                    </div>
+                    <div class="client-badge" id="client-badge">
+                        <span data-i18n="client_label">客户端</span>:
+                        <span id="client-value" data-i18n="loading">加载中...</span>
+                    </div>
                 </div>
             </div>
 
@@ -81,8 +87,8 @@
                 <section class="panel-card">
                     <h3 class="card-title" data-i18n="iterations">迭代次数</h3>
                     <div class="range-container">
-                        <input type="range" id="iter-range" min="100" max="50000" value="9000" class="range-input">
-                        <input type="number" id="iter-value" value="9000" class="num-input num-inline">
+                        <input type="range" id="iter-range" min="1" max="50000" value="9000" class="range-input">
+                        <input type="number" id="iter-value" value="9000" min="1" max="50000" class="num-input num-inline">
                     </div>
                     <button class="btn btn-outline btn-info" id="reset-iters" data-i18n="reset_iters">应用推荐值</button>
                 </section>
@@ -220,6 +226,16 @@
                 <label data-i18n="port">端口</label>
                 <input type="number" id="port-input" value="5000" min="1024" max="65535" class="num-input">
                 <span class="settings-hint" data-i18n="port_hint">修改端口需重启服务器生效</span>
+            </div>
+            <div class="settings-item">
+                <label data-i18n="client_name">客户端名称</label>
+                <input type="text" id="client-name-input" maxlength="40" class="num-input">
+            </div>
+            <div class="settings-item">
+                <label class="settings-checkbox">
+                    <input type="checkbox" id="auto-open-browser" checked>
+                    <span data-i18n="auto_open_browser">自动打开浏览器</span>
+                </label>
             </div>
             <div class="modal-actions">
                 <button class="btn btn-outline btn-danger" id="restore-default" data-i18n="restore_default">恢复默认</button>

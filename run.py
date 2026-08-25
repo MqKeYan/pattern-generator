@@ -5,6 +5,12 @@ import os
 import signal
 import gc
 import subprocess
+import socket
+import shutil
+import threading
+import time
+import webbrowser
+import winreg
 
 # PyInstaller打包后只能看到_internal/目录，需添加系统site-packages
 # 以便加载用户自行安装的包（如PyTorch）
@@ -58,16 +64,83 @@ except ImportError:
     input("按回车键退出...")
     sys.exit(1)
 
-from web.server import app, client_cache, simulator
-from waitress import serve
 from version import VERSION
-from port_check import show_port_status, kill_port_processes
+from port_check import get_port_pids, show_port_status, kill_port_processes
+from settings import load_settings, update_settings
 
 # 服务端口
-PORT = 5000
+startup_settings = load_settings()
+PORT = startup_settings['port']
+AUTO_OPEN_BROWSER = startup_settings['auto_open_browser']
+AUTO_OPEN_BROWSER_CONFIGURED = startup_settings['auto_open_browser_configured']
 
 # 全局缓存清理标记
 _cleaned = False
+
+
+def open_browser_when_ready(url):
+    """等待本地服务就绪后打开浏览器"""
+    for _ in range(50):
+        try:
+            with socket.create_connection(('127.0.0.1', PORT), timeout=0.2):
+                open_browser_new_window(url)
+                return
+        except OSError:
+            time.sleep(0.1)
+
+
+def open_browser_new_window(url):
+    """使用默认浏览器的新窗口打开地址"""
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r'Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice',
+        ) as key:
+            prog_id = str(winreg.QueryValueEx(key, 'ProgId')[0]).lower()
+    except OSError:
+        prog_id = ''
+
+    browser_paths = {
+        'chrome': [
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+            os.path.join(os.environ.get('PROGRAMFILES', ''), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+            os.path.join(os.environ.get('PROGRAMFILES(X86)', ''), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        ],
+        'edge': [
+            os.path.join(os.environ.get('PROGRAMFILES', ''), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+            os.path.join(os.environ.get('PROGRAMFILES(X86)', ''), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        ],
+        'firefox': [
+            os.path.join(os.environ.get('PROGRAMFILES', ''), 'Mozilla Firefox', 'firefox.exe'),
+            os.path.join(os.environ.get('PROGRAMFILES(X86)', ''), 'Mozilla Firefox', 'firefox.exe'),
+        ],
+        'brave': [
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+            os.path.join(os.environ.get('PROGRAMFILES', ''), 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+        ],
+        'opera': [
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Opera', 'opera.exe'),
+            os.path.join(os.environ.get('PROGRAMFILES', ''), 'Opera', 'launcher.exe'),
+        ],
+    }
+    browser_path = next(
+        (
+            path for name, paths in browser_paths.items()
+            if name in prog_id
+            for path in paths
+            if path and os.path.isfile(path)
+        ),
+        None,
+    )
+
+    try:
+        if browser_path:
+            subprocess.Popen([browser_path, '--new-window', url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            webbrowser.open_new(url)
+    except OSError:
+        webbrowser.open_new(url)
 
 def cleanup_on_exit():
     """清理缓存和内存"""
@@ -75,7 +148,8 @@ def cleanup_on_exit():
     if _cleaned:
         return
     _cleaned = True
-    print("\n正在清理缓存...")
+    os.system('cls')
+    print("正在清理缓存...")
     try:
         client_cache.clear()
         simulator.clear_memory()
@@ -90,11 +164,6 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 if __name__ == '__main__':
-    # 注册退出信号处理
-    signal.signal(signal.SIGINT, signal_handler)
-    if hasattr(signal, 'SIGTERM'):
-        signal.signal(signal.SIGTERM, signal_handler)
-
     # 获取本机局域网IP（匹配RFC 1918私网地址）
     out = subprocess.run(['ipconfig'], capture_output=True, text=True, encoding='gbk', errors='ignore').stdout
     ips = [w for l in (out or '').split('\n') for w in l.split() if w.count('.') == 3]
@@ -109,13 +178,65 @@ if __name__ == '__main__':
             kill_port_processes(occupied)
         else:
             print("跳过清理，直接启动")
+            while True:
+                new_port = input("请输入新的端口号（1024-65535）：").strip()
+                try:
+                    candidate_port = int(new_port)
+                except ValueError:
+                    print("端口号必须是数字，请重新输入。")
+                    continue
+                if not 1024 <= candidate_port <= 65535:
+                    print("端口号范围必须为1024-65535，请重新输入。")
+                    continue
+                if get_port_pids(candidate_port):
+                    print(f"端口 {candidate_port} 已被占用，请输入其他端口号。")
+                    continue
+                PORT = candidate_port
+                update_settings(port=PORT)
+                print(f"端口 {PORT} 未被占用，将使用该端口启动。")
+                break
+
+    # 端口页确认后清屏，首次运行时设置浏览器启动方式
+    input("按回车继续启动...")
+    os.system('cls')
+
+    if not AUTO_OPEN_BROWSER_CONFIGURED:
+        print("=" * 60)
+        print("  自动打开浏览器设置")
+        print("=" * 60)
+        while True:
+            browser_choice = input("是否自动打开浏览器？(y/n): ").strip().lower()
+            if browser_choice in ('y', 'n'):
+                break
+            print("请输入 y 或 n。")
+        AUTO_OPEN_BROWSER = browser_choice == 'y'
+        update_settings(
+            auto_open_browser=AUTO_OPEN_BROWSER,
+            auto_open_browser_configured=True,
+        )
+        os.system('cls')
+
+    # 端口确认后再初始化模拟器，确保设备信息晚于端口提示输出
+    from web.server import app, client_cache, simulator
+    from waitress import serve
+
+    # 注册退出信号处理
+    signal.signal(signal.SIGINT, signal_handler)
+    if hasattr(signal, 'SIGTERM'):
+        signal.signal(signal.SIGTERM, signal_handler)
 
     print("=" * 60)
     print(f"  斑图形成可视化系统 v{VERSION}")
-    print(f"  本机访问: http://localhost:{PORT}")
+    print(f"  使用设备: {'CUDA' if simulator.use_cuda else 'CPU'}")
+    print(f"  计算硬件: {simulator.hardware_info}")
     print(f"  局域网访问: http://{lan_ip}:{PORT}")
     print("  按 Ctrl+C 停止服务器")
     print("=" * 60)
+
+    # 服务开始监听后按设置自动打开系统浏览器
+    if AUTO_OPEN_BROWSER:
+        lan_url = f'http://{lan_ip}:{PORT}'
+        threading.Thread(target=open_browser_when_ready, args=(lan_url,), daemon=True).start()
 
     try:
         # threads=8 支持多用户同时访问，计算由锁串行

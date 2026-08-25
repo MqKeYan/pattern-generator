@@ -8,7 +8,7 @@ TITLE_TRANS = {
     'x_pop': {'zh-CN': 'X种群', 'zh-TW': 'X種群', 'en': 'X Population'},
     'y_pop': {'zh-CN': 'Y种群', 'zh-TW': 'Y種群', 'en': 'Y Population'},
     'combined': {'zh-CN': '合并斑图', 'zh-TW': '合併斑圖', 'en': 'Combined Pattern'},
-    'evolution_title': {'zh-CN': '多点时间演化曲线', 'zh-TW': '多點時間演化曲線', 'en': 'Multi-Point Evolution Curves'},
+    'evolution_title': {'zh-CN': '时间演化曲线', 'zh-TW': '時間演化曲線', 'en': 'Evolution Curves'},
     'iterations': {'zh-CN': '迭代次数', 'zh-TW': '疊代次數', 'en': 'Iterations'},
     'density': {'zh-CN': '种群密度', 'zh-TW': '種群密度', 'en': 'Population Density'},
     'surface': {'zh-CN': '三维表面', 'zh-TW': '三維表面', 'en': '3D Surface'},
