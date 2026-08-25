@@ -111,8 +111,6 @@ src/                                 # ソフトウェアコード
 │   ├── models.py                    # 5種類の反応拡散方程式 + ラプラシアン
 │   ├── simulation.py                # シミュレーションエンジン — グリッド初期化、反復、メモリ管理
 │   └── visualization.py             # 可視化データ生成 — Plotly JSON形式
-├── port_check.py                    # ポート占有チェック
-├── settings.py                      # ポートとブラウザ自動起動設定の管理
 ├── web/                             # Webサービス層
 │   ├── server.py                    # Flask Webサービス — API + ページルーティング
 │   ├── static/
@@ -124,6 +122,8 @@ src/                                 # ソフトウェアコード
 │   │   └── favicon.ico              # サイトアイコン
 │   └── templates/
 │       └── index.html               # メインページ
+├── port_check.py                    # ポート占有チェック
+├── settings.py                      # ポートとブラウザ自動起動設定の管理
 └── version.py                       # バージョン管理
 
 run.py                               # 起動スクリプト

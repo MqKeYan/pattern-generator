@@ -111,8 +111,6 @@ src/                                 # 軟體程式碼
 │   ├── models.py                    # 5 種反應擴散方程式 + 拉普拉斯算子
 │   ├── simulation.py                # 模擬引擎 — 網格初始化、疊代、記憶體管理
 │   └── visualization.py             # 視覺化資料生成 — Plotly JSON 格式
-├── port_check.py                    # 連接埠佔用檢查
-├── settings.py                      # 連接埠與瀏覽器自動開啟設定管理
 ├── web/                             # Web 服務層
 │   ├── server.py                    # Flask Web 服務 — API + 頁面路由
 │   ├── static/
@@ -124,6 +122,8 @@ src/                                 # 軟體程式碼
 │   │   └── favicon.ico              # 網站圖示
 │   └── templates/
 │       └── index.html               # 主頁面
+├── port_check.py                    # 連接埠佔用檢查
+├── settings.py                      # 連接埠與瀏覽器自動開啟設定管理
 └── version.py                       # 版本號管理
 
 run.py                               # 啟動指令碼
