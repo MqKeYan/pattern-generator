@@ -10,6 +10,7 @@ build/
 # 运行时临时文件
 temp/
 *.log
+settings.json
 
 # 环境变量（敏感信息）
 .env
