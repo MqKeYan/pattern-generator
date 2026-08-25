@@ -112,6 +112,7 @@ src/                                 # 软件代码
 │   ├── simulation.py                # 模拟引擎 — 网格初始化、迭代、内存管理
 │   └── visualization.py             # 可视化数据生成 — Plotly JSON 格式
 ├── port_check.py                    # 端口占用检查
+├── settings.py                      # 端口与自动打开浏览器设置管理
 ├── web/                             # Web 服务层
 │   ├── server.py                    # Flask Web 服务 — API + 页面路由
 │   ├── static/
@@ -126,6 +127,7 @@ src/                                 # 软件代码
 └── version.py                       # 版本号管理
 
 run.py                               # 启动脚本
+settings.json                        # 软件运行设置
 ```
 
 ## 讨论与交流

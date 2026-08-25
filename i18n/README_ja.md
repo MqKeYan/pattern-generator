@@ -112,6 +112,7 @@ src/                                 # ソフトウェアコード
 │   ├── simulation.py                # シミュレーションエンジン — グリッド初期化、反復、メモリ管理
 │   └── visualization.py             # 可視化データ生成 — Plotly JSON形式
 ├── port_check.py                    # ポート占有チェック
+├── settings.py                      # ポートとブラウザ自動起動設定の管理
 ├── web/                             # Webサービス層
 │   ├── server.py                    # Flask Webサービス — API + ページルーティング
 │   ├── static/
@@ -126,6 +127,7 @@ src/                                 # ソフトウェアコード
 └── version.py                       # バージョン管理
 
 run.py                               # 起動スクリプト
+settings.json                        # ソフトウェア実行設定
 ```
 
 ## ディスカッションと交流
