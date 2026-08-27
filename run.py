@@ -136,7 +136,11 @@ def open_browser_new_window(url):
 
     try:
         if browser_path:
-            subprocess.Popen([browser_path, '--new-window', url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(
+                [browser_path, '--new-window', '--start-maximized', url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         else:
             webbrowser.open_new(url)
     except OSError:
