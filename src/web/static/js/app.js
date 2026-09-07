@@ -3,21 +3,25 @@ const state = {
     currentModel: '模型1',  // 当前选择的模型
     modelConfigs: {},      // 模型配置信息
     initRanges: {},        // 初始值范围
-    modelDisplayNames: {}, // 模型显示名称
     trackPoints: [],       // 跟踪点列表
     animationData: null,  // 动画数据
     animTimer: null,       // 动画计时器
     animFrame: 0,         // 当前动画帧
     animPlaying: false,   // 动画播放状态
     clientId: '',         // 服务器分配的客户端号
-    clientToken: '',      // 浏览器访问端令牌
+    clientSessionId: '',  // 当前页面会话标识
+    presenceSocket: null, // 前台在线连接
+    presenceReconnectTimer: null, // 在线连接重连计时器
+    pageClosing: false,   // 页面是否正在关闭
     clientName: '',       // 客户端自定义名称
     lastViz2d: null,       // 最近一次二维斑图数据
     animationRestorePromise: null, // 动画缓存恢复请求
     lastViz3d: null,       // 最近一次三维图数据（懒渲染用）
     rendered3d: false,     // 三维图是否已渲染
     render3dToken: 0,      // 三维图渲染序号，避免旧绘制完成后覆盖新状态
-    zMaxLocked: null,      // z轴最大值锁定值（首次渲染后固定）
+    currentTaskId: null,   // 进行中的任务 ID
+    taskCancelRequested: false, // 用户已请求取消
+    pollTimer: null,       // 任务状态轮询计时器
 };
 
 // DOM元素缓存
@@ -49,6 +53,9 @@ function renderAnimationPlot(id, data, layout, config) {
     return Plotly.newPlot(chart, data, layout, config);
 }
 
+// HTML 转义（信息卡片等动态插值用）
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 /**
  * 获取访问端令牌
  * 令牌持久保存在浏览器中，用于识别同一访问端
@@ -62,14 +69,59 @@ function getClientToken() {
     return token;
 }
 
+// 客户端名称支持多语言文字、数字、空格和常见标点，不支持表情及控制字符。
+const clientNamePattern = /^[\p{L}\p{N}\p{Zs}.,!?;:'"()[\]{}\-_/\\@#%&+=·，。！？；：、“”‘’（）【】《》、…]+$/u;
+
+function isSupportedClientName(value) {
+    return !value || clientNamePattern.test(value);
+}
+
+function createClientSessionId() {
+    return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
 /**
- * 更新客户端信息显示
+ * 前台在线连接：由 WebSocket 连接状态代表页面是否在线。
  */
-function updateClientBadge() {
-    const identity = state.clientName || state.clientId;
-    const clientValue = $('#client-value');
-    clientValue.textContent = identity;
-    clientValue.removeAttribute('data-i18n');
+function startPresenceSocket() {
+    const connect = () => {
+        if (state.pageClosing) return;
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        let socket;
+        try {
+            socket = new WebSocket(`${proto}://${location.host}/api/presence`);
+        } catch {
+            state.presenceReconnectTimer = setTimeout(connect, 3000);
+            return;
+        }
+        state.presenceSocket = socket;
+        socket.onopen = () => {
+            if (state.pageClosing) {
+                socket.close();
+                return;
+            }
+            socket.send(JSON.stringify({
+                type: 'presence',
+                client_id: state.clientId,
+                client_session_id: state.clientSessionId,
+                client_name: state.clientName,
+            }));
+        };
+        socket.onclose = () => {
+            if (state.presenceSocket !== socket || state.pageClosing) return;
+            state.presenceReconnectTimer = setTimeout(connect, 3000);
+        };
+        socket.onerror = () => socket.close();
+    };
+
+    window.addEventListener('pagehide', () => {
+        state.pageClosing = true;
+        clearTimeout(state.presenceReconnectTimer);
+        if (state.presenceSocket && state.presenceSocket.readyState < WebSocket.CLOSING) {
+            state.presenceSocket.close();
+        }
+    });
+    connect();
 }
 
 /**
@@ -123,10 +175,12 @@ function showToast(msg, type = 'info') {
 /**
  * 显示加载动画
  * @param {string} text - 加载提示文本
+ * @param {boolean} cancellable - 是否显示取消任务按钮
  */
-function showLoading(text = '计算中...') {
+function showLoading(text = '计算中...', cancellable = false) {
     $('#loading-overlay').classList.add('show');
     $('#loading-text').textContent = text;
+    $('#loading-cancel').style.display = cancellable ? '' : 'none';
 }
 
 /**
@@ -134,6 +188,11 @@ function showLoading(text = '计算中...') {
  */
 function hideLoading() {
     $('#loading-overlay').classList.remove('show');
+    $('#loading-cancel').style.display = 'none';
+    if (state.pollTimer) {
+        clearTimeout(state.pollTimer);
+        state.pollTimer = null;
+    }
 }
 
 /**
@@ -155,10 +214,14 @@ function setStatus(msg, type = '') {
  */
 async function apiCall(url, data) {
     data.client_id = state.clientId;
+    data.client_session_id = state.clientSessionId;
     data.lang = i18n.lang;  // 传语言给后端，用于图表标题翻译
     const resp = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
         body: JSON.stringify(data),
     });
     const json = await resp.json();
@@ -273,9 +336,10 @@ function initCustomSelect() {
  * 加载配置、恢复设置、初始化UI
  */
 async function init() {
-    state.clientToken = getClientToken();
-    state.clientId = state.clientToken;
+    state.clientId = getClientToken();
+    state.clientSessionId = createClientSessionId();
     state.clientName = localStorage.getItem('client_name') || '';
+    startPresenceSocket();
 
     try {
         // 同步读取服务端内联配置，刷新首帧即渲染完整侧边栏
@@ -285,16 +349,21 @@ async function init() {
         state.modelConfigs = config.models;
         state.initRanges = config.init_ranges;
         state.paramNames = config.param_names;
-        state.modelDisplayNames = config.display_names || {};
-        state.appSettings = config.settings || { port: 5000, auto_open_browser: true };
 
-        // 硬件名称由翻译标签显示，型号作为动态值单独更新
-        const hardwareValue = $('#hardware-value');
-        hardwareValue.textContent = config.hardware_info.replace(/^(GPU|CPU):\s*/, '');
-        hardwareValue.removeAttribute('data-i18n');
-
-        // 客户端名称
-        updateClientBadge();
+        // 信息卡片：标签按语言翻译（data-i18n，切换语言时自动更新），数值为动态内容
+        const info = config.service_info || {};
+        const infoRows = [
+            ['info_version', config.version],
+            ['info_client_id', state.clientId],
+            ['info_python', info.python],
+            ['info_cuda', info.cuda],
+            ['info_pytorch', info.torch],
+            ['info_cpu', info.cpu],
+            ['info_gpu', info.gpu],
+            ['info_hardware', info.hardware],
+        ];
+        $('#info-grid').innerHTML = infoRows.map(([k, v]) =>
+            `<span class="status-k" data-i18n="${k}">${i18n.t(k)}</span><span class="status-v" title="${esc(v)}">${esc(v ?? '-')}</span>`).join('');
 
         // 构建模型选择器（模型名按语言翻译）
         const select = $('#model-select');
@@ -393,7 +462,6 @@ async function restoreAnimationCache() {
 
             state.animationData = animation;
             state.animStart = parseInt($('#anim-start').value) || 0;
-            state.animEnd = parseInt($('#anim-end').value) || animation.total_frames;
             state.animFrame = 0;
             state.animPlaying = false;
             $('#anim-slider').max = animation.total_frames - 1;
@@ -466,7 +534,7 @@ function renderParams(names, defaults) {
             <span class="param-name">${name} ${cnName}：</span>
             <input type="number" class="num-input param-input" data-index="${i}"
                    value="${defaults[i]}" step="any">
-            <button class="param-reset" data-index="${i}" data-default="${defaults[i]}">重置</button>
+            <button class="param-reset" data-impact="caution" data-index="${i}" data-default="${defaults[i]}">重置</button>
         </div>`;
     }).join('');
 
@@ -528,8 +596,12 @@ function addTrackPoint() {
     // 为跟踪点分配颜色（8 种可选颜色循环使用）
     const colors = ['#2ecc71', '#1abc9c', '#3498db', '#9b59b6', '#e74c3c', '#f39c12', '#e67e22', '#34495e'];
     const colorIndex = state.trackPoints.length % colors.length;
-    state.trackPoints.push({ x, y, color: colors[colorIndex] });
+    state.trackPoints.push({ id: createTrackPointId(), x, y, color: colors[colorIndex] });
     updateTrackList();
+}
+
+function createTrackPointId() {
+    return `point-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 /**
@@ -559,6 +631,8 @@ function renderTrackPoints() {
     const el = $('#track-list');
     el.innerHTML = '';
     state.trackPoints.forEach(p => {
+        // 旧版持久化数据没有 id，渲染时补齐以支持后续编辑和删除。
+        if (!p.id) p.id = createTrackPointId();
         // 确保每个跟踪点都有颜色（兼容旧数据）
         if (!p.color) {
             const colors = ['#2ecc71', '#1abc9c', '#3498db', '#9b59b6', '#e74c3c', '#f39c12', '#e67e22', '#34495e'];
@@ -621,8 +695,81 @@ function deleteTrackPoint(id) {
 }
 
 /**
+ * 提交任务并轮询直至完成
+ * @param {string} url - 提交端点
+ * @param {Object} payload - 任务参数
+ * @returns {Promise<Object>} 任务结果
+ */
+async function submitAndPoll(url, payload) {
+    const resp = await apiCall(url, payload);
+    state.currentTaskId = resp.task_id;
+    state.taskCancelRequested = false;
+    if (resp.paused) showToast(i18n.t('task_paused'), 'info');
+    showLoading(i18n.t('task_queued', { n: resp.queue_position }), true);
+    return pollTask(resp.task_id);
+}
+
+/**
+ * 轮询任务状态：执行中 1 秒一次，排队中 3 秒一次
+ * @param {string} taskId - 任务 ID
+ * @returns {Promise<Object>} 任务结果
+ */
+function pollTask(taskId) {
+    return new Promise((resolve, reject) => {
+        async function poll() {
+            if (state.taskCancelRequested) {
+                reject(new Error(i18n.t('task_cancelled')));
+                return;
+            }
+            try {
+                const resp = await fetch(`/api/task/${taskId}`);
+                const task = await resp.json();
+                if (!resp.ok) throw new Error(task.error || i18n.t('task_not_found'));
+                if (task.status === 'queued') {
+                    showLoading(i18n.t('task_queued', { n: task.queue_position || 0 }), true);
+                    state.pollTimer = setTimeout(poll, 1000);
+                } else if (task.status === 'running') {
+                    showLoading(i18n.t('task_running', { p: task.progress ?? 0 }), true);
+                    state.pollTimer = setTimeout(poll, 400);
+                } else if (task.status === 'completed') {
+                    resolve(task.result);
+                } else if (task.status === 'cancelled') {
+                    reject(new Error(i18n.t('task_cancelled')));
+                } else if (task.status === 'timeout') {
+                    reject(new Error(i18n.t('task_timeout_status')));
+                } else if (task.status === 'expired') {
+                    reject(new Error(i18n.t('task_expired_status')));
+                } else {
+                    reject(new Error(task.error || i18n.t('task_failed_status', { msg: task.status })));
+                }
+            } catch (err) {
+                reject(err);
+            }
+        }
+        poll();
+    });
+}
+
+/**
+ * 取消当前任务（由加载遮罩上的取消按钮触发）
+ */
+async function cancelCurrentTask() {
+    const taskId = state.currentTaskId;
+    if (!taskId || state.taskCancelRequested) return;
+    state.taskCancelRequested = true;
+    try {
+        await apiCall(`/api/task/${taskId}/cancel`, {});
+        hideLoading();
+    } catch (err) {
+        // 取消失败时继续轮询，任务可能刚好已开始收尾
+        state.taskCancelRequested = false;
+        showToast(i18n.t('task_cancel_failed', { msg: err.message }), 'error');
+    }
+}
+
+/**
  * 运行模拟
- * 发送模拟请求并渲染结果
+ * 提交任务并轮询，完成后渲染结果
  */
 async function runSimulation() {
     // 如果当前在动画演示页，跳回二维斑图
@@ -630,7 +777,6 @@ async function runSimulation() {
         switchTab('tab-2d');
     }
 
-    showLoading(i18n.t('simulating'));
     setStatus(i18n.t('simulating_status'), 'info');
 
     try {
@@ -638,7 +784,7 @@ async function runSimulation() {
         const initRanges = getInitRanges();
         const iterations = getIterations();
 
-        const resp = await apiCall('/api/simulate', {
+        const result = await submitAndPoll('/api/simulate', {
             model: state.currentModel,
             params,
             iterations,
@@ -647,28 +793,29 @@ async function runSimulation() {
             y_min: initRanges.y_min,
             y_max: initRanges.y_max,
             track_points: state.trackPoints,
-            auto_clean: true,
         });
 
         // 渲染二维斑图
-        state.lastViz2d = resp.viz_2d;
-        render2DPatterns(resp.viz_2d);
+        state.lastViz2d = result.viz_2d;
+        render2DPatterns(result.viz_2d);
         // 三维斑图懒渲染：仅当三维标签可见时立即渲染，否则等切换时再渲染
-        state.lastViz3d = resp.viz_3d;
+        state.lastViz3d = result.viz_3d;
         if ($('.tab-btn.active')?.dataset?.tab === 'tab-3d') {
-            render3DPattern(resp.viz_3d);
+            render3DPattern(result.viz_3d);
         } else {
             state.rendered3d = false;
         }
 
-        setStatus(i18n.t('sim_complete', { model: resp.model, iters: resp.iterations }), 'success');
+        setStatus(i18n.t('sim_complete', { model: result.model, iters: result.iterations }), 'success');
         showToast(i18n.t('sim_done'), 'success');
     } catch (err) {
         console.error('模拟失败:', err);
-        setStatus(i18n.t('sim_failed', { msg: err.message }), 'error');
-        showToast(i18n.t('sim_failed', { msg: err.message }), 'error');
+        const cancelled = err.message === i18n.t('task_cancelled');
+        setStatus(i18n.t('sim_failed', { msg: err.message }), cancelled ? '' : 'error');
+        showToast(err.message, cancelled ? 'info' : 'error');
     } finally {
         hideLoading();
+        state.currentTaskId = null;
     }
 }
 
@@ -689,7 +836,7 @@ function render2DPatterns(vizData) {
         z: xPop.data,
         type: 'heatmap',
         colorscale: 'Viridis',
-        colorbar: { title: i18n.t('density'), len: 0.8 },
+        colorbar: { title: i18n.t('density'), len: 0.8, tickformat: '.4g' },
     }], {
         title: { text: xPop.title, font: { size: 14, color: colors.text } },
         paper_bgcolor: 'rgba(0, 0, 0, 0)',
@@ -705,7 +852,7 @@ function render2DPatterns(vizData) {
         z: yPop.data,
         type: 'heatmap',
         colorscale: 'Plasma',
-        colorbar: { title: i18n.t('density'), len: 0.8 },
+        colorbar: { title: i18n.t('density'), len: 0.8, tickformat: '.4g' },
     }], {
         title: { text: yPop.title, font: { size: 14, color: colors.text } },
         paper_bgcolor: 'rgba(0, 0, 0, 0)',
@@ -730,7 +877,7 @@ function render2DPatterns(vizData) {
             [0.75, 'rgb(0,180,0)'],
             [1, 'rgb(0,200,200)'],
         ],
-        colorbar: { title: i18n.t('density'), len: 0.8 },
+        colorbar: { title: i18n.t('density'), len: 0.8, tickformat: '.4g' },
     }], {
         title: { text: combined.title, font: { size: 14, color: colors.text } },
         paper_bgcolor: 'rgba(0, 0, 0, 0)',
@@ -783,11 +930,10 @@ function render2DPatterns(vizData) {
             title: i18n.t('iterations_axis'),
             gridcolor: colors.grid,
             zeroline: false,
-            minallowed: xMin,
-            maxallowed: xMax,
             // 使用双端范围条调整曲线的显示起点和终点
             rangeslider: {
                 visible: true,
+                range: [xMin, xMax],
                 thickness: 0.06,
                 bgcolor: 'rgba(25, 35, 53, 0.72)',
                 bordercolor: colors.border,
@@ -795,6 +941,50 @@ function render2DPatterns(vizData) {
             },
         },
     }, { responsive: true, displayModeBar: false });
+
+    // 不用 minallowed/maxallowed：Plotly 对平移越界会压缩范围（表现为缩放）。
+    // 这里在拖动过程中把可视窗口整体钳制在数据范围内，到端点停住，只平移不缩放。
+    // 注意：Plotly 拖动产生的事件里范围以扁平键 xaxis.range[0]/xaxis.range[1] 传递，
+    // 而不是 evt.xaxis.range（后者仅在双击复位等少数场景出现）。
+    const evoChart = document.getElementById('chart-evolution');
+    const clampEvoRange = (range) => {
+        if (!Array.isArray(range)) return null;
+        const [r0, r1] = range;
+        if (!Number.isFinite(r0) || !Number.isFinite(r1)) return null;
+        const span = xMax - xMin;
+        const width = r1 - r0;
+        if (span <= 0 || width <= 0) return null;
+        if (width >= span) return (r0 === xMin && r1 === xMax) ? null : [xMin, xMax];
+        if (r0 < xMin) return [xMin, xMin + width];
+        if (r1 > xMax) return [xMax - width, xMax];
+        return null;
+    };
+    // 平移越界时 Plotly 仍会按拖动起点重算范围，relayout 会被后续 mousemove 覆盖，
+    // 因此一旦触界立即结束本次拖动（合成 mouseup），再钳制到数据边界，实现“到端点停住”。
+    const endEvoDrag = () => {
+        const dragCover = document.querySelector('.dragcover');
+        if (dragCover) dragCover.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    };
+    const onEvoRelayout = (evt) => {
+        let range = evt?.['xaxis.range'];
+        if (!Array.isArray(range)) {
+            const r0 = evt?.['xaxis.range[0]'];
+            const r1 = evt?.['xaxis.range[1]'];
+            if (!Number.isFinite(r0) && !Number.isFinite(r1)) return;
+            const cur = evoChart._fullLayout?.xaxis?.range || [xMin, xMax];
+            range = [Number.isFinite(r0) ? r0 : cur[0], Number.isFinite(r1) ? r1 : cur[1]];
+        }
+        const clamped = clampEvoRange(range);
+        if (clamped) {
+            endEvoDrag();
+            Plotly.relayout(evoChart, {
+                'xaxis.range': clamped,
+                'xaxis.rangeslider.range': clamped,
+            }).catch(() => {});
+        }
+    };
+    evoChart.on('plotly_relayouting', onEvoRelayout);
+    evoChart.on('plotly_relayout', onEvoRelayout);
 }
 
 /**
@@ -829,12 +1019,14 @@ function render3DPattern(vizData) {
     // Z数据归一化到0-100，三轴等物理长度，轴固定不漂移
     const zRange = (zMax - zMin) || 0.001;
     const zScaled = zArr.map(row => row.map(v => (v - zMin) / zRange * 100));
+    // 刻度文本：保留4位有效数字并去除多余零
+    const fmtTick = v => String(Number((v / 100 * zRange + zMin).toPrecision(4)));
     // Z轴刻度，起点不标避免与XY轴原点重叠
     const zTickVals = [20, 40, 60, 80, 100];
-    const zTickText = zTickVals.map(v => (v / 100 * zRange + zMin).toFixed(5));
+    const zTickText = zTickVals.map(fmtTick);
     // 颜色条刻度覆盖全范围，映射真实值
     const cbarTickVals = [0, 20, 40, 60, 80, 100];
-    const cbarTickText = cbarTickVals.map(v => (v / 100 * zRange + zMin).toFixed(7));
+    const cbarTickText = cbarTickVals.map(fmtTick);
 
     const surfaceTrace = {
         z: zScaled,
@@ -936,10 +1128,10 @@ function render3DPattern(vizData) {
 
 /**
  * 运行动画
- * 生成动画数据并初始化动画界面
+ * 提交任务并轮询，完成后初始化动画界面
  */
 async function runAnimation() {
-    showLoading(i18n.t('anim_preparing'));
+    setStatus(i18n.t('anim_preparing'));
 
     try {
         const params = getParams();
@@ -949,7 +1141,7 @@ async function runAnimation() {
 
         // 生成帧数 = 结束 - 起始，动画需要模拟到结束迭代但只存储范围内的帧
         const displayFrames = animEnd - animStart;
-        const resp = await apiCall('/api/animate', {
+        const result = await submitAndPoll('/api/animate', {
             model: state.currentModel,
             params,
             frames: displayFrames,
@@ -960,16 +1152,15 @@ async function runAnimation() {
             y_max: initRanges.y_max,
         });
 
-        state.animationData = resp.animation;
-        state.animStart = resp.start_iteration || animStart;
-        state.animEnd = animEnd;
+        state.animationData = result.animation;
+        state.animStart = result.start_iteration || animStart;
         state.animFrame = 0;
         state.animPlaying = false;
 
         // 设置滑块
-        $('#anim-slider').max = resp.animation.total_frames - 1;
+        $('#anim-slider').max = result.animation.total_frames - 1;
         $('#anim-slider').value = 0;
-        $('#anim-frame-info').textContent = i18n.t('frame_count', { current: 0, total: resp.animation.total_frames });
+        $('#anim-frame-info').textContent = i18n.t('frame_count', { current: 0, total: result.animation.total_frames });
 
         // 渲染第一帧
         renderAnimFrame(0);
@@ -983,8 +1174,11 @@ async function runAnimation() {
     } catch (err) {
         console.error('动画准备失败:', err);
         hideLoading();
-        showToast(i18n.t('anim_failed', { msg: err.message }), 'error');
-        setStatus(i18n.t('anim_failed_status'), 'error');
+        const cancelled = err.message === i18n.t('task_cancelled');
+        showToast(err.message, cancelled ? 'info' : 'error');
+        setStatus(i18n.t('anim_failed_status'), cancelled ? '' : 'error');
+    } finally {
+        state.currentTaskId = null;
     }
 }
 
@@ -1004,7 +1198,7 @@ function renderAnimFrame(frameIdx) {
         z: frame.x_data,
         type: 'heatmap',
         colorscale: 'Viridis',
-        colorbar: { title: i18n.t('density'), len: 0.8 },
+        colorbar: { title: i18n.t('density'), len: 0.8, tickformat: '.4g' },
     }], {
         title: { text: i18n.t('anim_title_x', { iter: iterNum }), font: { size: 13, color: colors.text } },
         height: 420,
@@ -1021,7 +1215,7 @@ function renderAnimFrame(frameIdx) {
         z: frame.y_data,
         type: 'heatmap',
         colorscale: 'Plasma',
-        colorbar: { title: i18n.t('density'), len: 0.8 },
+        colorbar: { title: i18n.t('density'), len: 0.8, tickformat: '.4g' },
     }], {
         title: { text: i18n.t('anim_title_y', { iter: iterNum }), font: { size: 13, color: colors.text } },
         height: 420,
@@ -1054,7 +1248,7 @@ function renderAnimFrame(frameIdx) {
             [0.75, 'rgb(0,180,0)'],
             [1, 'rgb(0,200,200)'],
         ],
-        colorbar: { title: i18n.t('density'), len: 0.8 },
+        colorbar: { title: i18n.t('density'), len: 0.8, tickformat: '.4g' },
     }], {
         title: { text: i18n.t('anim_title_combined', { iter: iterNum }), font: { size: 13, color: colors.text } },
         height: 420,
@@ -1279,6 +1473,8 @@ function bindEvents() {
         switchTab('tab-anim');
         runAnimation();
     });
+    // 加载遮罩上的取消任务按钮
+    $('#loading-cancel').addEventListener('click', cancelCurrentTask);
     $('#reset-all').addEventListener('click', () => {
         onModelChange();
         state.trackPoints = [];
@@ -1301,9 +1497,7 @@ function bindEvents() {
     const modalContent = $('#modal-content');
     const modalHeader = $('.modal-header');
     const languageSelect = $('#language-select');
-    const portInput = $('#port-input');
     const clientNameInput = $('#client-name-input');
-    const autoOpenBrowserInput = $('#auto-open-browser');
 
     // 初始化自定义下拉组件
     initCustomSelect();
@@ -1356,14 +1550,11 @@ function bindEvents() {
         }
         // 加载保存的设置
         const savedLang = localStorage.getItem('app_language') || i18n.getLang();
-        const savedPort = state.appSettings.port || 5000;
 
         // 设置自定义下拉组件的值
         setCustomSelectValue(languageSelect, savedLang);
 
-        portInput.value = savedPort;
         clientNameInput.value = state.clientName || state.clientId;
-        autoOpenBrowserInput.checked = state.appSettings.auto_open_browser;
         settingsModal.classList.add('show');
     });
 
@@ -1379,74 +1570,44 @@ function bindEvents() {
         }
     });
 
-    // 保存设置
-    $('#settings-save').addEventListener('click', async () => {
+    // 保存设置（仅本地项：语言 + 客户端名称，端口等启动项已移至后台管理中心）
+    $('#settings-save').addEventListener('click', () => {
         const newLang = languageSelect.value;
-        const newPort = parseInt(portInput.value);
         const enteredClientName = clientNameInput.value.trim();
         const newClientName = enteredClientName === state.clientId ? '' : enteredClientName;
 
-        if (!Number.isInteger(newPort) || newPort < 1024 || newPort > 65535) {
-            showToast('端口范围: 1024-65535', 'error');
-            return;
-        }
         if (newClientName.length > 40) {
             showToast('客户端名称不能超过40个字符', 'error');
             return;
         }
-
-        try {
-            const settingsResp = await apiCall('/api/settings', {
-                port: newPort,
-                auto_open_browser: autoOpenBrowserInput.checked,
-            });
-            state.appSettings = settingsResp.settings;
-            state.clientName = newClientName;
-            localStorage.setItem('client_name', newClientName);
-            i18n.setLang(newLang);
-            localStorage.setItem('app_port', newPort);
-            updateClientBadge();
-        } catch (err) {
-            showToast(err.message, 'error');
+        if (!isSupportedClientName(newClientName)) {
+            showToast('客户端名称包含不支持的字符，请勿使用表情、换行或不可见字符', 'error');
             return;
         }
+
+        state.clientName = newClientName;
+        localStorage.setItem('client_name', newClientName);
+        i18n.setLang(newLang);
 
         showToast(i18n.t('reset_done'), 'success');
         settingsModal.classList.remove('show');
     });
 
     // 恢复默认设置
-    $('#restore-default').addEventListener('click', async () => {
+    $('#restore-default').addEventListener('click', () => {
         // 恢复默认语言（检测系统语言）
         const defaultLang = detectSystemLang();
-        // 恢复默认端口
-        const defaultPort = 5000;
 
         // 设置自定义下拉组件的值
         setCustomSelectValue(languageSelect, defaultLang);
 
-        portInput.value = defaultPort;
         clientNameInput.value = '';
-        autoOpenBrowserInput.checked = true;
 
-        // 清除保存的设置
+        // 清除保存的本地设置
         localStorage.removeItem('app_language');
-        localStorage.removeItem('app_port');
-
-        try {
-            const resp = await apiCall('/api/settings', {
-                port: defaultPort,
-                auto_open_browser: true,
-            });
-            state.appSettings = resp.settings;
-            state.clientName = '';
-            localStorage.removeItem('client_name');
-            i18n.setLang(defaultLang);
-            updateClientBadge();
-        } catch (err) {
-            showToast(err.message, 'error');
-            return;
-        }
+        state.clientName = '';
+        localStorage.removeItem('client_name');
+        i18n.setLang(defaultLang);
 
         showToast(i18n.t('reset_done'), 'success');
         settingsModal.classList.remove('show');

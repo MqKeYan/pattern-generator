@@ -54,6 +54,11 @@
     --color-warning: #e67e22;
     --color-danger: #e74c3c;
     --color-info: #1abc9c;
+    /* 按钮影响等级：低影响、普通变更、注意、中高风险 */
+    --action-low: var(--color-text-secondary);
+    --action-normal: var(--color-primary);
+    --action-caution: var(--color-warning);
+    --action-danger: var(--color-danger);
 
     /* 思源黑体全语言变体，默认简体优先 */
     --font-cjk: 'Noto Sans CJK SC', 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK JP', 'Noto Sans CJK KR';
@@ -81,9 +86,15 @@
     --transition-normal: 250ms ease;
 }
 
-/* === 系统语言适配：繁体系统优先用TC字形；非中文系统用Times New Roman === */
+/* === 系统语言适配：英文用Times New Roman；其他均用思源黑体，对应语言变体优先 === */
 :root[lang^="zh-TW"], :root[lang^="zh-HK"] {
     --font-cjk: 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK SC', 'Noto Sans CJK JP', 'Noto Sans CJK KR';
+}
+:root[lang^="ja"] {
+    --font-cjk: 'Noto Sans CJK JP', 'Noto Sans CJK SC', 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK KR';
+}
+:root[lang^="ko"] {
+    --font-cjk: 'Noto Sans CJK KR', 'Noto Sans CJK SC', 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK JP';
 }
 :root[lang^="en"] {
     --font-cjk: 'Times New Roman', 'Noto Sans CJK SC', 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK JP', 'Noto Sans CJK KR';
@@ -109,9 +120,6 @@ input[type="number"] {
     box-sizing: border-box;
 }
 
-html {
-}
-
 body {
     font-family: var(--font-body);
     background:
@@ -132,23 +140,22 @@ body::after {
     position: fixed;
     width: 34vw;
     height: 34vw;
-    border-radius: 50%;
     pointer-events: none;
-    filter: blur(70px);
     opacity: 0.34;
     z-index: 0;
 }
 
+/* 光斑用径向渐变模拟高斯模糊效果，避免大型 blur 图层触发重绘条纹 */
 body::before {
     top: -18vw;
     left: 28vw;
-    background: rgba(59, 139, 235, 0.18);
+    background: radial-gradient(circle closest-side, rgba(59, 139, 235, 0.18), rgba(59, 139, 235, 0.09) 55%, transparent);
 }
 
 body::after {
     right: -16vw;
     bottom: -18vw;
-    background: rgba(26, 188, 156, 0.14);
+    background: radial-gradient(circle closest-side, rgba(26, 188, 156, 0.14), rgba(26, 188, 156, 0.07) 55%, transparent);
 }
 
 /* === 滚动条 === */
@@ -228,17 +235,18 @@ body::after {
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
 }
-.hardware-badge {
-    font-size: 15px;
-    font-family: var(--font-cjk);
-    color: var(--color-primary);
-    margin-bottom: 8px;
-    word-break: break-all;
+
+/* 信息卡片：标签/数值两列网格（样式与后台管理中心卡片一致） */
+.status-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    font-size: 14px;
 }
-.client-badge {
-    font-size: 15px;
-    font-family: var(--font-cjk);
-    color: var(--color-primary);
+.status-grid .status-k { opacity: 0.65; }
+.status-grid .status-v {
+    font-variant-numeric: tabular-nums;
+    text-align: left;
     word-break: break-all;
 }
 
@@ -276,21 +284,6 @@ body::after {
     margin-bottom: 10px;
     letter-spacing: 0.3px;
     text-transform: uppercase;
-}
-
-/* === 信息网格 === */
-.info-grid {
-    display: grid;
-    grid-template-columns: 50px 1fr;
-    gap: 4px 12px;
-    font-size: 14px;
-}
-.info-label {
-    color: var(--color-text-muted);
-    font-weight: 500;
-}
-.info-value {
-    color: var(--color-text);
 }
 
 /* === 输入控件 === */
@@ -388,7 +381,7 @@ body::after {
 .custom-select-option {
     padding: 10px 12px;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
     color: var(--color-text);
     border-bottom: 1px solid rgba(164, 190, 232, 0.1);
 }
@@ -489,7 +482,7 @@ body::after {
     border-radius: var(--radius-md);
     cursor: pointer;
     white-space: nowrap;
-    transition: all var(--transition-fast);
+    transition: border-color var(--transition-fast), color var(--transition-fast), background-color var(--transition-fast);
     box-shadow: var(--glass-highlight);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
@@ -533,11 +526,6 @@ body::after {
 .track-item:hover {
     background: rgba(164, 190, 232, 0.08);
 }
-.track-empty {
-    font-size: 14px;
-    color: var(--color-text-muted);
-    padding: 2px;
-}
 .track-dot {
     width: 10px;
     height: 10px;
@@ -566,7 +554,10 @@ body::after {
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 8px 16px;
+    /* 全局统一按钮高度：固定 37px，内容垂直居中，内边距不再影响高度 */
+    height: 37px;
+    box-sizing: border-box;
+    padding: 0 16px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     font-family: var(--font-body);
@@ -575,7 +566,7 @@ body::after {
     font-weight: 500;
     color: var(--color-text);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
     outline: none;
     width: 100%;
     margin-bottom: 8px;
@@ -591,10 +582,6 @@ body::after {
 .btn:active {
     transform: scale(0.97);
 }
-.btn-icon {
-    font-size: 14px;
-}
-
 .btn-outline {
     border-color: var(--color-border);
 }
@@ -624,9 +611,27 @@ body::after {
 .btn-warning { color: var(--color-warning); }
 .btn-warning:hover { color: #f5963f; }
 
-.btn-sm {
-    padding: 5px 10px;
-    font-size: 14px;
+/* === 按钮影响等级 ===
+   业务只声明 data-impact，颜色由共享规范自动映射，前后台保持一致。 */
+button[data-impact="low"],
+a.btn[data-impact="low"] {
+    color: var(--action-low);
+}
+button[data-impact="normal"],
+a.btn[data-impact="normal"] {
+    color: var(--action-normal);
+}
+button[data-impact="caution"],
+a.btn[data-impact="caution"] {
+    color: var(--action-caution);
+}
+button[data-impact="danger"],
+a.btn[data-impact="danger"] {
+    color: var(--action-danger);
+}
+button[data-impact]:hover,
+a.btn[data-impact]:hover {
+    color: color-mix(in srgb, currentColor 78%, white);
 }
 
 .btn-row {
@@ -695,7 +700,7 @@ body::after {
     line-height: 24px;
     font-weight: 500;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: transform var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
     letter-spacing: 0.3px;
 }
 .tab-btn:hover {
@@ -738,14 +743,6 @@ body::after {
     gap: 10px;
     min-height: 420px;
 }
-.viz-grid-anim {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
-    flex: 1;
-    min-height: 500px;
-}
-
 .chart-box {
     background: rgba(25, 35, 53, 0.38);
     border: 1px solid var(--color-border);
@@ -932,12 +929,6 @@ body::after {
     border-color: var(--color-border-hover);
     background: rgba(31, 46, 70, 0.56);
 }
-.settings-hint {
-    display: block;
-    font-size: 13px;
-    color: var(--color-text-dim);
-    margin-top: 4px;
-}
 .modal-actions {
     display: flex;
     justify-content: space-between;
@@ -946,9 +937,6 @@ body::after {
     gap: 12px;
 }
 .modal-actions .btn {
-    height: 37px;
-    box-sizing: border-box;
-    padding: 6px 16px;
     margin-bottom: 0;
 }
 .modal-buttons {
@@ -993,26 +981,19 @@ body::after {
     color: var(--color-text-secondary);
 }
 
+#loading-cancel {
+    width: 110px;
+    min-width: 110px;
+    margin-top: 14px;
+    font-size: 16px;
+    white-space: nowrap;
+    justify-content: center;
+}
+
 /* 保持键盘操作时的焦点可见，毛玻璃层不应削弱操作反馈。 */
 :focus-visible {
     outline: 2px solid rgba(116, 170, 255, 0.9);
     outline-offset: 2px;
-}
-
-@supports not ((backdrop-filter: blur(1px))) {
-    .sidebar,
-    .sidebar-header,
-    .panel-card,
-    .select-input,
-    .num-input,
-    .tab-nav,
-    .tab-panel,
-    .chart-box,
-    .anim-control-bar,
-    .toast,
-    .btn {
-        background: var(--color-surface-2);
-    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1035,9 +1016,6 @@ body::after {
     .viz-grid-2d {
         grid-template-columns: 1fr 1fr;
     }
-    .viz-grid-anim {
-        grid-template-columns: 1fr 1fr;
-    }
 }
 @media (max-width: 768px) {
     .app-container {
@@ -1048,8 +1026,7 @@ body::after {
         min-width: 100%;
         max-height: 40vh;
     }
-    .viz-grid-2d,
-    .viz-grid-anim {
+    .viz-grid-2d {
         grid-template-columns: 1fr;
     }
 }

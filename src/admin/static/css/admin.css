@@ -1,0 +1,345 @@
+/* 后台管理中心扩展样式 —— 复用主界面 CSS 变量与毛玻璃主题 */
+
+/* ---------- 侧边栏导航与状态 ---------- */
+.admin-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.admin-nav-btn {
+    padding: 10px 14px;
+    border: 1px solid var(--color-border, rgba(164, 190, 232, 0.2));
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    color: inherit;
+    text-align: left;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.admin-nav-btn:hover { background: rgba(255, 255, 255, 0.08); }
+
+.admin-nav-btn.active {
+    color: var(--color-primary);
+    background: rgba(52, 152, 219, 0.22);
+    border-color: rgba(52, 152, 219, 0.55);
+}
+
+.status-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    font-size: 14px;
+}
+
+.status-k { opacity: 0.65; }
+.status-v { font-variant-numeric: tabular-nums; text-align: right; }
+
+#service-info { gap: 6px 16px; }
+#service-info .status-v { text-align: left; }
+
+.ws-state {
+    margin-top: 10px;
+    font-size: 14px;
+    opacity: 0.75;
+}
+
+.ws-state.online { color: #2ecc71; }
+.ws-state.offline { color: #e74c3c; }
+
+/* ---------- 概览统计卡片 ---------- */
+.stat-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.stat-card {
+    padding: 14px 16px;
+    border: 1px solid var(--color-border, rgba(164, 190, 232, 0.2));
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(8px);
+}
+
+.stat-card .stat-label { font-size: 14px; opacity: 0.65; }
+.stat-card .stat-value {
+    margin-top: 6px;
+    font-size: 26px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.stat-card .stat-unit { font-size: 14px; opacity: 0.6; margin-left: 4px; }
+.stat-card.warn .stat-value { color: #f39c12; }
+.stat-card.hot .stat-value { color: #e74c3c; }
+
+/* ---------- 表格 ---------- */
+.table-wrap { overflow-x: auto; }
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.admin-table th, .admin-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--color-border, rgba(164, 190, 232, 0.15));
+    text-align: left;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-table th { opacity: 0.65; font-weight: 500; }
+.admin-table tr:hover td { background: rgba(255, 255, 255, 0.04); }
+
+.admin-table .cell-actions { display: flex; gap: 6px; align-items: center; }
+/* 覆盖主界面 .btn 的 width:100% 与 margin-bottom:8px（:last-child 会被去掉，
+   导致同一行最后一个按钮被拉伸得比其他按钮高）；高度已由主界面 .btn 全局固定为 37px */
+.admin-table .cell-actions .btn { width: auto; margin-bottom: 0; }
+.admin-table .btn { font-size: 16px; }
+
+.status-pill {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 14px;
+    border: 1px solid var(--color-border, rgba(164, 190, 232, 0.2));
+}
+.status-pill.online, .status-pill.completed { color: #2ecc71; border-color: rgba(46, 204, 113, 0.5); }
+.status-pill.computing, .status-pill.running { color: #3498db; border-color: rgba(52, 152, 219, 0.55); }
+.status-pill.queued, .status-pill.waiting { color: #f39c12; border-color: rgba(243, 156, 18, 0.5); }
+.status-pill.paused { color: #9b59b6; border-color: rgba(155, 89, 182, 0.5); }
+.status-pill.failed, .status-pill.timeout, .status-pill.expired { color: #e74c3c; border-color: rgba(231, 76, 60, 0.5); }
+.status-pill.cancelled { opacity: 0.7; }
+.status-pill.offline { opacity: 0.5; }
+
+.progress-cell { min-width: 110px; }
+.progress-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+.progress-bar > div {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db, #2ecc71);
+    transition: width 0.4s;
+}
+
+/* ---------- 表单 ---------- */
+.form-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px 16px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.form-grid label { font-size: 14px; opacity: 0.8; }
+
+.settings-checkbox {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.btn-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.overview-actions-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+    gap: 12px;
+}
+
+.overview-actions-grid .panel-card { margin-bottom: 0; }
+
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.quick-actions .btn {
+    min-width: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+    white-space: nowrap;
+}
+
+.report-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+
+#report-type { grid-column: 1 / -1; }
+#report-format { min-width: 88px; }
+
+.report-actions .btn {
+    width: auto;
+    min-width: 96px;
+    margin-bottom: 0;
+}
+
+@media (max-width: 1100px) {
+    .overview-actions-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+    .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .report-actions { grid-template-columns: 1fr; }
+    #report-type { grid-column: auto; }
+    .report-actions .btn { width: 100%; }
+}
+
+.btn-row .custom-select { flex: 1; min-width: 140px; }
+
+.list-editor .list-items { margin-bottom: 10px; }
+.list-editor .list-input { flex: 1; min-width: 220px; }
+
+.list-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 8px 8px 0;
+    padding: 4px 10px;
+    border: 1px solid var(--color-border, rgba(164, 190, 232, 0.2));
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: monospace;
+}
+
+.list-entry button {
+    border: none;
+    background: none;
+    color: #e74c3c;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+}
+
+/* ---------- 日志 ---------- */
+.log-toolbar { margin-bottom: 10px; }
+.log-search { flex: 1; min-width: 200px; }
+
+.log-file-path {
+    font-size: 14px;
+    opacity: 0.6;
+    margin-bottom: 8px;
+    word-break: break-all;
+}
+
+.log-stream {
+    height: 420px;
+    overflow-y: auto;
+    border: 1px solid var(--color-border, rgba(164, 190, 232, 0.15));
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-family: Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.7;
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.log-line { white-space: pre-wrap; word-break: break-all; }
+.log-line.lv-WARNING { color: #f39c12; }
+.log-line.lv-ERROR { color: #e74c3c; }
+
+/* ---------- 监控图表（Win11 任务管理器风格：每参数独立瓷砖，双列网格） ---------- */
+#tab-monitor .monitor-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 16px;
+}
+#tab-monitor .chart-tile {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+/* 标题行只显示名称标题（文字采用主界面图表字体样式，白色、思源黑体继承） */
+#tab-monitor .tile-head {
+    padding: 0 2px 4px;
+    font-size: 12.5px;
+    color: var(--color-plot-text);
+}
+#tab-monitor .chart-box {
+    position: relative;
+    flex: 1;
+    min-height: 130px;
+}
+
+/* 图内四角标注：左上=单位+名称，右上=最大值，左下=时间窗，右下=最小值 */
+.tile-corner {
+    position: absolute;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--color-text);
+    pointer-events: none;
+    z-index: 5;
+}
+.tile-corner.tl { top: 5px; left: 6px; }
+.tile-corner.tr { top: 5px; right: 6px; }
+.tile-corner.bl { bottom: 5px; left: 6px; }
+.tile-corner.br { bottom: 5px; right: 6px; }
+
+/* 监控图表自定义悬浮弹窗：带向下箭头，背景为序列颜色，显示在鼠标点上方 */
+.plot-hover-tip {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    display: none;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: var(--tip-bg, rgba(20, 31, 49, 0.95));
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 2000;
+}
+.plot-hover-tip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--tip-bg, rgba(20, 31, 49, 0.95));
+}
+.plot-hover-tip.show { display: block; }
+
+a.btn { text-decoration: none; display: inline-block; }
+
+/* 回归保护：后台组件禁止恢复滤镜，避免窗口重绘时出现竖向合成条纹。 */
+.admin-page .sidebar,
+.admin-page .sidebar-header,
+.admin-page .client-card,
+.admin-page .panel-card,
+.admin-page .main-content,
+.admin-page .tab-panel,
+.admin-page .chart-box,
+.admin-page .anim-control-bar,
+.admin-page .stat-card,
+.admin-page .btn,
+.admin-page .custom-select-trigger,
+.admin-page .custom-select-options,
+.admin-page .num-input,
+.admin-page .toast,
+.admin-page .modal-overlay,
+.admin-page .modal-content,
+.admin-page .loading-overlay {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}

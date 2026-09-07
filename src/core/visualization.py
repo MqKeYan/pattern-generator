@@ -1,7 +1,6 @@
 """可视化模块 - 生成前端渲染所需的数据格式"""
 
 import numpy as np
-import json
 
 # 图表标题翻译字典（与前端i18n的key对应）
 TITLE_TRANS = {
