@@ -23,12 +23,11 @@ else:
 from admin.logger import LOG_DIR
 from admin.reports import generate_report
 from admin.websocket import ConnectionManager, check_ws_origin, push_loop, STARTED_AT
-from app_context import asset_version, service_info as host_service_info
-from settings import public_settings, reset_settings
-from version import VERSION
-from security import (SessionStore, authenticate_request, authenticate_websocket,
-                      RequestBodyLimitMiddleware, set_session_cookie,
-                      valid_host_and_origin)
+from common.app_context import asset_version, service_info as host_service_info
+from common.config import public_settings, reset_settings, VERSION
+from common.security import (SessionStore, authenticate_request, authenticate_websocket,
+                             RequestBodyLimitMiddleware, set_session_cookie,
+                             valid_host_and_origin)
 
 
 _LOG_FILENAME_RE = re.compile(
@@ -449,7 +448,7 @@ class AdminApp:
             except Exception:
                 return fail('请求体必须是 JSON')
             try:
-                from settings import update_settings as us
+                from common.config import update_settings as us
                 us(**data)
             except (ValueError, TypeError) as e:
                 return fail(str(e))

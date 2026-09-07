@@ -1,11 +1,9 @@
-"""同软件实例检测 - 启动前检测本软件是否已有其他实例正在运行
+"""启动检查模块 - 端口占用清理与同软件实例检测
 
-多实例并存时会互相覆盖 config/settings.json 中的端口配置，导致先启动
-实例对外公布的网址失效，并争抢 GPU 显存、缓存与任务队列。
-检测手段（双保险）：
-1. 实例锁文件 config/instance.lock：运行实例启动时写入自身 PID 与端口；
-2. 进程扫描：打包运行按 exe 进程名匹配，开发运行按 run.py 命令行匹配。
-锁文件中的进程已不存在时视为残留，读取时自动清理。
+1. 端口检查：检测相应用端口是否被占用，仅允许清理属于本软件的进程；
+2. 实例检测：多实例并存时会互相覆盖 config/settings.json 中的端口配置，
+   导致先启动实例对外公布的网址失效，并争抢 GPU 显存、缓存与任务队列。
+   检测手段（双保险）：实例锁文件 config/instance.lock + 进程扫描。
 """
 
 import json
@@ -15,22 +13,109 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from persistence import atomic_write_json
-from paths import software_root
+from common.config import software_root
+from common.persistence import atomic_write_json
+
+
+# ============================================================
+# 端口检查
+# ============================================================
+
+def get_port_pids(port):
+    """获取监听指定端口的进程PID列表"""
+    out = subprocess.run(['netstat', '-ano'], capture_output=True, text=True,
+                         encoding='gbk', errors='ignore').stdout
+    pids = []
+    pattern = re.compile(r'^\s*TCP\s+\S+:(\d+)\s+\S+\s+LISTENING\s+(\d+)\s*$')
+    for line in out.splitlines():
+        match = pattern.match(line)
+        if match and int(match.group(1)) == int(port):
+            pid = match.group(2)
+            if pid not in pids:
+                pids.append(pid)
+    return pids
+
+
+def get_process_details(pids):
+    """批量查询进程的进程名"""
+    if not pids:
+        return []
+    # PowerShell 一次查询所有进程
+    ps_filter = ' or '.join(f"ProcessId={p}" for p in pids)
+    script = (f"$r = @(Get-CimInstance Win32_Process -Filter \"{ps_filter}\" "
+              f"-ErrorAction SilentlyContinue | Select-Object ProcessId,Name,ExecutablePath,CommandLine); "
+              f"$r | ConvertTo-Json -Compress")
+    result = subprocess.run(['powershell', '-NoProfile', '-Command', script],
+                            capture_output=True, text=True,
+                            encoding='utf-8', errors='ignore')
+    if result.returncode != 0 or not result.stdout.strip():
+        # 查询失败时仅返回PID，进程名未知
+        return [{'ProcessId': int(p), 'Name': '(未知)'} for p in pids]
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return [{'ProcessId': int(p), 'Name': '(未知)'} for p in pids]
+    if isinstance(data, dict):
+        data = [data]
+    return data
+
+
+def show_port_status(port):
+    """打印端口占用情况，返回占用进程列表"""
+    pids = get_port_pids(port)
+    if not pids:
+        print(f"  端口 {port} 未被占用，可以正常启动")
+        return []
+    processes = get_process_details(pids)
+    print(f"  端口 {port} 被以下进程占用：")
+    for p in processes:
+        print(f"    PID {p.get('ProcessId')}  {p.get('Name')}")
+    return processes
+
+
+def _belongs_to_software(process):
+    """仅允许终止本软件实例，不误杀其他应用。"""
+    name = str(process.get('Name') or '').lower()
+    if getattr(sys, 'frozen', False):
+        return name == Path(sys.executable).name.lower()
+    if not (name.startswith('python') or name == 'py.exe'):
+        return False
+    return bool(re.search(r'(?:^|[\\/\s\"\'])run\.py(?:$|[\s\"\'])',
+                          str(process.get('CommandLine') or '').lower()))
+
+
+def kill_port_processes(processes, confirmed=False):
+    """用户明确确认后，仅清理属于本软件的端口占用进程。"""
+    if not confirmed:
+        print('  未获得明确确认，未清理任何进程')
+        return False
+    all_success = True
+    for p in processes:
+        pid = p.get('ProcessId')
+        if not pid or not _belongs_to_software(p):
+            print(f"  已跳过非本软件进程: PID {pid} ({p.get('Name')})")
+            all_success = False
+            continue
+        result = subprocess.run(['taskkill', '/PID', str(pid), '/F'],
+                                capture_output=True, text=True,
+                                encoding='gbk', errors='ignore')
+        if result.returncode == 0:
+            print(f"  已清理: PID {pid} ({p.get('Name')})")
+        else:
+            all_success = False
+            msg = (result.stdout.strip() or result.stderr.strip() or '未知错误')
+            print(f"  清理失败: PID {pid} ({msg})")
+    return all_success
+
+
+# ============================================================
+# 实例检测
+# ============================================================
 
 # 开发模式下命令行中 run.py 的路径边界匹配（python run.py / "..."\...\run.py" 等）
 _RUN_PY_RE = re.compile(r'(?:^|[\s"\'\\])run\.py(?:$|[\s"\'])')
 
-
-def _software_root():
-    """软件根目录：打包后为 exe 所在目录，开发时为项目根目录"""
-    if getattr(sys, 'frozen', False):
-        return Path(sys.executable).resolve().parent
-    return software_root()
-
-
-def _lock_path():
-    return _software_root() / 'config' / 'instance.lock'
+_LOCK_PATH = software_root() / 'config' / 'instance.lock'
 
 
 def get_process_list():
@@ -65,9 +150,8 @@ def read_instance_lock(processes=None):
 
     processes 传入 get_process_list() 的结果可避免重复查询。
     """
-    path = _lock_path()
     try:
-        data = json.loads(path.read_text(encoding='utf-8'))
+        data = json.loads(_LOCK_PATH.read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return None
     pid = data.get('pid')
@@ -79,7 +163,7 @@ def read_instance_lock(processes=None):
         alive = _pid_alive(pid)
     if not alive:
         try:
-            path.unlink(missing_ok=True)
+            _LOCK_PATH.unlink(missing_ok=True)
         except OSError:
             pass
         return None
@@ -95,10 +179,9 @@ def write_instance_lock(port, admin_port):
         'exe': sys.executable if getattr(sys, 'frozen', False) else 'python run.py',
         'started_at': time.strftime('%Y-%m-%d %H:%M:%S'),
     }
-    path = _lock_path()
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(path, data)
+        _LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(_LOCK_PATH, data)
     except OSError:
         pass
 
@@ -106,7 +189,7 @@ def write_instance_lock(port, admin_port):
 def remove_instance_lock():
     """删除本软件的实例锁文件（文件不存在时静默跳过）"""
     try:
-        _lock_path().unlink(missing_ok=True)
+        _LOCK_PATH.unlink(missing_ok=True)
     except OSError:
         pass
 

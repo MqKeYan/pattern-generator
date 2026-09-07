@@ -5,7 +5,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from paths import software_root
+from common.config import software_root
 
 
 SOFTWARE_ROOT = software_root()

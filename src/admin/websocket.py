@@ -129,5 +129,5 @@ async def push_loop(manager, app_context, interval=1.0):
 
 def check_ws_origin(ws: WebSocket, allowed_host: str) -> bool:
     """WS 端点内 Origin 校验（HTTP 中间件不覆盖 WebSocket 连接）"""
-    from security import valid_host_and_origin
+    from common.security import valid_host_and_origin
     return valid_host_and_origin(ws.headers, {allowed_host})

@@ -12,7 +12,7 @@ import threading
 from collections import deque
 from datetime import datetime
 from pathlib import Path
-from paths import software_root
+from common.config import software_root
 
 SOFTWARE_ROOT = software_root()
 LOG_DIR = SOFTWARE_ROOT / 'log'

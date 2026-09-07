@@ -30,12 +30,12 @@ if getattr(sys, 'frozen', False):
 else:
     base_path = os.path.dirname(__file__)
 
-from app_context import (access, clients, client_cache, init_config, log,
-                         monitor, presence_sockets, settings, task_queue)
+from common.app_context import (access, clients, client_cache, init_config, log,
+                                monitor, presence_sockets, settings, task_queue)
 from admin.tasks import QueueLimitError
-from security import (SessionStore, authenticate_request, authenticate_websocket,
-                      RequestBodyLimitMiddleware, set_session_cookie, trusted_hosts,
-                      valid_host_and_origin)
+from common.security import (SessionStore, authenticate_request, authenticate_websocket,
+                             RequestBodyLimitMiddleware, set_session_cookie, trusted_hosts,
+                             valid_host_and_origin)
 
 
 @asynccontextmanager

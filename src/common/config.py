@@ -1,4 +1,8 @@
-"""软件共享设置 - 保存启动脚本与Web界面共同使用的配置
+"""软件配置模块 - 统管路径、版本号与运行时设置
+
+1. software_root()：开发/packaging 运行路径解析；
+2. VERSION：软件版本号；
+3. 设置管理：保存启动脚本与 Web 界面共同使用的配置。
 
 配置文件位于 config/settings.json（运行时自动创建）。
 迁移链：%LOCALAPPDATA%\\PatternGenerator\\settings.json → 软件根目录 settings.json → config/settings.json。
@@ -10,7 +14,19 @@ import shutil
 import sys
 from copy import deepcopy
 from pathlib import Path
-from persistence import atomic_write_json, backup_corrupt_file
+from common.persistence import atomic_write_json, backup_corrupt_file
+
+
+def software_root():
+    """软件根目录：打包后为 exe 所在目录，开发时为项目根目录"""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).resolve().parent
+    # 本文件位于 src/common/，上两级为项目根目录
+    return Path(__file__).resolve().parents[2]
+
+
+# 版本信息
+VERSION = "2.0.0"
 
 
 DEFAULT_SETTINGS = {
@@ -94,25 +110,8 @@ _NOTIFICATION_INT_RANGES = {
 }
 
 
-def public_settings(settings):
-    """生成可返回给后台前端的设置副本，隐藏通知凭据。"""
-    public = dict(settings)
-    notifications = dict(public.get('notifications') or {})
-    notifications['pushplus_token_configured'] = bool(notifications.get('pushplus_token'))
-    notifications.pop('pushplus_token', None)
-    public['notifications'] = notifications
-    return public
-
-
-def _software_root():
-    """软件根目录：打包后为 exe 所在目录，开发时为项目根目录"""
-    if getattr(sys, 'frozen', False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parents[1]
-
-
 def _config_dir():
-    return _software_root() / 'config'
+    return software_root() / 'config'
 
 
 def _settings_path():
@@ -121,7 +120,7 @@ def _settings_path():
 
 def _root_legacy_path():
     """旧版根目录设置文件路径"""
-    return _software_root() / 'settings.json'
+    return software_root() / 'settings.json'
 
 
 def _localappdata_legacy_path():
@@ -146,6 +145,16 @@ def _migrate_legacy_settings():
             shutil.move(str(localappdata_legacy), str(config_path))
     except OSError:
         pass
+
+
+def public_settings(settings):
+    """生成可返回给后台前端的设置副本，隐藏通知凭据。"""
+    public = dict(settings)
+    notifications = dict(public.get('notifications') or {})
+    notifications['pushplus_token_configured'] = bool(notifications.get('pushplus_token'))
+    notifications.pop('pushplus_token', None)
+    public['notifications'] = notifications
+    return public
 
 
 def _validate_field(key, value):

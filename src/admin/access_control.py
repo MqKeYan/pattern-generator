@@ -11,8 +11,8 @@ import threading
 import time
 from collections import deque
 from pathlib import Path
-from persistence import atomic_write_json, backup_corrupt_file
-from paths import software_root
+from common.persistence import atomic_write_json, backup_corrupt_file
+from common.config import software_root
 
 SOFTWARE_ROOT = software_root()
 CONFIG_DIR = SOFTWARE_ROOT / 'config'

@@ -14,8 +14,7 @@ import threading
 from core.config import GRID_SIZE, MODEL_CONFIGS, MODEL_INIT_RANGES, PARAM_NAMES, MODEL_DISPLAY_NAMES
 from core.simulation import PatternSimulator, SimulationCancelled
 from core.visualization import PatternVisualizer
-from settings import load_settings
-from version import VERSION
+from common.config import load_settings, VERSION
 from admin.logger import get_logger
 from admin.monitor import SystemMonitor
 from admin.clients import ClientManager
