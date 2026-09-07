@@ -7,7 +7,7 @@
 <p align="center">
   <a href="../LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue"></a>
   <a href="#"><img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Flask-3.0+-000000?logo=flask&logoColor=white"></a>
+  <a href="#"><img src="https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white"></a>
   <a href="#"><img src="https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white"></a>
   <a href="#"><img src="https://img.shields.io/badge/Plotly.js-2.32+-3F4F75?logo=plotly&logoColor=white"></a>
 </p>
@@ -31,14 +31,44 @@
 
 ## 功能總覽
 
+### 前台視覺化
 | 功能 | 說明 |
 |------|------|
-|  GPU 加速 | PyTorch CUDA 後端 |
-|  多維視覺化 | Plotly.js 二維熱力圖 / 三維表面圖 / 時間演化曲線 |
-|  動畫演化 | 逐幀播放斑圖演化過程，支援暫停、調整速度、跳轉影格 |
-|  參數調校 | 7-8 個參數自由調整，即時切換模型，一鍵重設預設值 |
-|  自訂追蹤點 | 在網格任意位置設定觀察點，追蹤族群密度隨時間的變化 |
-|  記憶體管理 | 模擬完成後自動清理 GPU 記憶體，防止記憶體洩漏 |
+| GPU 加速 | PyTorch CUDA 後端，自動偵測 CUDA / CPU，支援多 GPU 依空閒顯存調度 |
+| 多維視覺化 | Plotly.js 二維熱力圖 / 三維表面圖 / 時間演化曲線 |
+| 動畫演化 | 逐幀播放斑圖演化過程，支援暫停、調速、幀跳轉，幀歷史常駐主機記憶體 |
+| 參數調校 | 7-8 個參數自由調整，即時切換模型，一鍵重設預設值，支援單參數重置 |
+| 自訂追蹤點 | 在網格任意位置（0-99）設定最多 8 個觀察點，追蹤族群密度隨時間變化 |
+| 記憶體管理 | 模擬完成後自動清理 GPU 顯存與主機快取，防止記憶體洩漏 |
+
+### 任務與排程
+| 功能 | 說明 |
+|------|------|
+| 非同步任務佇列 | FIFO 排程，支援排隊位置與執行進度即時顯示，載入遮罩提供「取消任務」 |
+| 超時與重試 | 任務超時（預設 300s）自動取消，失敗自動重試（預設 1 次），重試耗盡進入死信佇列 |
+| 顯存預檢 | 任務分派前按空閒顯存 + 預留閾值選擇 GPU，不足則繼續排隊 |
+| 快取恢復 | 重新整理頁面自動恢復參數與圖表資料，支援二維/動畫按需恢復 |
+
+### 後台管理中心（`http://127.0.0.1:5001` 僅本機）
+
+| 模組 | 說明 |
+|------|------|
+| 總覽 | 全域狀態、累計統計、快捷操作、報表匯出入口 |
+| 即時監控 | CPU/記憶體/GPU 使用率/顯存/溫度/功耗/磁碟/網路即時曲線（3 分鐘滾動）與峰值彙總 |
+| 任務佇列 | 執行中/等待中/歷史/死信佇列管理，支援取消、重試、清空、刪除 |
+| 用戶端管理 | 線上/離線/暫停/排隊/計算狀態追蹤；暫停、踢出（同時封禁 IP）、快取清理、備註標籤 |
+| 存取控制 | IP / client_id 黑白名單、區域網路限制、IP+client_id 限流、拒絕紀錄 |
+| 告警通知 | Windows 彈窗、系統提示音、PushPlus 微信推送，可設定閾值與事件 |
+| 日誌 | 每次執行獨立落盤 `log/YYYY-MM-DD_HH-mm-ss_PID.log`，支援即時檢視、過濾、搜尋與下載 |
+| 系統設定 | 連接埠、並發、超時、限流、快取上限等執行時設定，支援恢復預設 |
+
+### 維運與報表
+| 功能 | 說明 |
+|------|------|
+| WebSocket 即時推送 | 監控指標、用戶端、任務、日誌每秒推送，斷線 3 秒重連 |
+| 線上狀態 | 前台 WebSocket 線上連線（`/api/presence`），斷開即離線；5 分鐘超時兜底 |
+| 報表匯出 | 用戶端活動 / 任務執行 / 系統資源峰值 / 存取控制 / 告警事件，支援 CSV/XLSX/JSON |
+| 連接埠檢測 | 啟動時檢測主服務與後台連接埠佔用，支援互動清理與 3 秒倒數自動啟動 |
 
 ## 模型與斑圖
 
@@ -57,8 +87,9 @@
 | 作業系統 | Windows 10 版本 1809 或更新 / Windows 11 |
 | 架構 | 64 位元（x64） |
 | 記憶體 | 建議 8GB 以上 |
-| GPU（選用） | NVIDIA GPU + CUDA 12.x+，記憶體 4GB+ |
+| GPU（選用） | NVIDIA GPU + CUDA 12.x+，記憶體 4GB+（無 GPU 自動降級 CPU） |
 | 瀏覽器 | Edge / Chrome / Firefox（存取 Web 介面） |
+| 網路 | 後台管理中心僅本機 `127.0.0.1:5001`，主介面支援區域網路 `0.0.0.0:5000` |
 
 ## 快速開始
 
@@ -67,8 +98,9 @@
 1. 從 [Releases](https://github.com/MqKeYan/pattern-generator/releases) 頁面下載最新版 `.zip` 壓縮檔
 2. 解壓縮到任意目錄（**不要放在需要系統管理員權限的目錄**，例如 `C:\Program Files`）
 3. 注意解壓縮後的 `pattern-generator.exe` 需要與 `_internal/` 資料夾在同一目錄
-4. 另外安裝 `Pytorch` 依賴，支援 `CUDA 13.2+` 版本的指令為 `pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu132`，或前往[官網](https://pytorch.org/get-started/locally/)
-5. 雙擊執行 `pattern-generator.exe`，點擊命令列的網址自動開啟頁面
+4. 另外安裝 `Pytorch` 依賴，支援 `CUDA 13.2+` 版本的指令為 `pip3 install torch --index-url https://download.pytorch.org/whl/cu132`，或前往[官網](https://pytorch.org/get-started/locally/)
+5. 雙擊執行 `pattern-generator.exe`，按提示完成連接埠檢測與瀏覽器自動開啟設定
+6. 主介面：`http://區域網路IP:5000`，後台：`http://127.0.0.1:5001`（僅本機）
 
 ### 從原始碼執行
 
@@ -78,17 +110,19 @@ git clone https://github.com/MqKeYan/pattern-generator.git
 cd pattern-generator
 pip install -r requirements.txt
 
-# GPU 加速
+# GPU 加速（選用）
 # 檢視 CUDA 版本資訊
 nvidia-smi
 # 下載對應 CUDA 版本的 Pytorch
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
+pip install torch --index-url https://download.pytorch.org/whl/cu132
 
-# 啟動服務
-python start.py --host 0.0.0.0
+# 啟動服務（同時啟動主服務與後台）
+python run.py
 ```
 
-啟動後，以瀏覽器存取 **http://localhost:5000** 。
+啟動後，以瀏覽器存取 **主介面 http://localhost:5000**，**後台 http://127.0.0.1:5001**。
+
+> 開發者提示：`run.py` 會同時啟動兩個 Uvicorn 服務；後台修改 `config/settings.json` 後需重啟生效。
 
 ## 使用流程
 
@@ -96,11 +130,24 @@ python start.py --host 0.0.0.0
 2. **調整參數**：修改參數數值，點擊 ↺ 按鈕重設單一參數，點擊「重設參數」還原全部預設值
 3. **設定初始值範圍**：調整 X/Y 族群的初始密度範圍
 4. **新增追蹤點**（選用）：輸入網格座標（0-99），觀察指定位置的族群變化
-5. **執行模擬**：調整疊代次數，點擊「執行模擬」，檢視結果
+5. **執行模擬**：調整疊代次數，點擊「執行模擬」，檢視載入遮罩中的排隊位置與即時進度（`執行中，進度 xx%`），可隨時「取消任務」
 6. **檢視結果**：
    - **二維斑圖**：X族群 / Y族群 熱力圖 + 合併斑圖 + 時間演化曲線
-   - **三維斑圖**：族群密度 3D 表面圖
-   - **動畫演化**：逐幀播放斑圖形成過程
+   - **三維斑圖**：族群密度 3D 表面圖（支援旋轉）
+   - **動畫演化**：逐幀播放斑圖形成過程，支援播放/暫停、影格滑桿、速度調節
+
+## 後台管理中心
+
+僅本機可存取 `http://127.0.0.1:5001`，左側全域狀態卡即時顯示執行時長、連接埠、線上用戶端、執行/等待任務數。
+
+- **總覽**：CPU/GPU/記憶體等關鍵指標卡、線上用戶端統計、累計計算時長、快捷操作與報表匯出。
+- **即時監控**：CPU/記憶體/處理程序記憶體、GPU 使用率/顯存、GPU 溫度/功耗/CPU 溫度、磁碟/網路速率四組曲線，線上用戶端數曲線本地滾動。
+- **任務佇列**：執行中/等待中/歷史/死信四表，支援按任務 ID 操作，顯示 GPU 分配與重試次數。
+- **用戶端管理**：展示 UUID、名稱、IP、狀態、當前任務、請求與成功/失敗/取消統計、線上時長、標籤備註；支援暫停/恢復、踢出封禁、清快取、備註。
+- **存取控制**：黑白名單按 IP 與 client_id 維護，支援區域網路私有網段限制與限流設定。
+- **告警通知**：可設定 `system_toast` / `system_sound` / `pushplus`，閾值如佇列積壓、GPU 溫度。
+- **日誌**：即時串流與歷史檔案下載，支援級別與關鍵字過濾。
+- **系統設定**：連接埠、並發、超時、重試、限流、顯存預留、結果保留時長、快取上限、通知等。
 
 ## 專案結構
 
@@ -111,8 +158,20 @@ src/                                 # 軟體程式碼
 │   ├── models.py                    # 5 種反應擴散方程式 + 拉普拉斯算子
 │   ├── simulation.py                # 模擬引擎 — 網格初始化、疊代、記憶體管理
 │   └── visualization.py             # 視覺化資料生成 — Plotly JSON 格式
+├── admin/                           # 後台管理中心
+│   ├── server.py                    # 後台 FastAPI 服務
+│   ├── clients.py                   # 用戶端狀態與統計
+│   ├── tasks.py                     # 非同步任務佇列與排程
+│   ├── monitor.py                   # 系統資源監控
+│   ├── access_control.py            # 存取控制
+│   ├── notifications.py             # 告警通知
+│   ├── reports.py                   # 報表匯出
+│   ├── logger.py                    # 日誌系統
+│   ├── websocket.py                 # WebSocket 推送
+│   ├── static/                      # 後台靜態資源
+│   └── templates/admin.html         # 後台頁面
 ├── web/                             # Web 服務層
-│   ├── server.py                    # Flask Web 服務 — API + 頁面路由
+│   ├── server.py                    # 主介面 FastAPI 服務 — API + 頁面路由
 │   ├── static/
 │   │   ├── css/style.css            # 深色科技風主題樣式
 │   │   ├── fonts/NotoSansCJK-VF.otf.ttc # 思源黑體可變字型
@@ -122,12 +181,16 @@ src/                                 # 軟體程式碼
 │   │   └── favicon.ico              # 網站圖示
 │   └── templates/
 │       └── index.html               # 主頁面
-├── port_check.py                    # 連接埠佔用檢查
-├── settings.py                      # 連接埠與瀏覽器自動開啟設定管理
-└── version.py                       # 版本號管理
+├── common/                          # 通用模組
+│   ├── app_context.py               # 共享執行時上下文
+│   ├── config.py                    # 設定、版本號與執行時路徑
+│   ├── persistence.py               # JSON 原子持久化
+│   ├── security.py                  # 來源、工作階段與存取金鑰驗證
+│   └── startup.py                   # 啟動檢查（連接埠佔用 + 單一實例偵測）
 
-run.py                               # 啟動指令碼
-settings.json                        # 軟體執行設定
+run.py                               # 啟動腳本（雙服務）
+pattern-generator.spec                # PyInstaller 打包設定
+requirements.txt                      # 依賴清單
 ```
 
 ## 討論與交流
@@ -136,7 +199,7 @@ settings.json                        # 軟體執行設定
 
 ## 行為準則
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;本專案遵循 **Contributor Covenant Code of Conduct**。我們致力於營造開放、友善、互相尊重的社群環境。
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;本專案遵循 [**Contributor Covenant Code of Conduct**](../CODE_OF_CONDUCT.md)。我們致力於營造開放、友善、互相尊重的社群環境。
 
 ## 授權條款
 
