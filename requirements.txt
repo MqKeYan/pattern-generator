@@ -1,17 +1,26 @@
 # python_requires>=3.13
 
 # 计算引擎
-# GPU 加速 (CUDA 12.x): pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
-# 纯 CPU 模式: pip install torch torchvision
-numpy>=1.24.0              # 多维数组与数值计算
-torch>=2.0.0               # GPU/CPU张量计算
+# GPU 加速 (CUDA 13.2): pip install torch --index-url https://download.pytorch.org/whl/cu132
+# 纯 CPU 模式: pip install torch
+numpy>=2.5.2                # 多维数组与数值计算
+torch>=2.14.0              # GPU/CPU张量计算
 
-# Web 框架
-flask>=3.0.0               # Web服务器框架
-waitress>=3.0.0             # 生产级WSGI服务器 (Windows兼容)
+# Web 框架（ASGI）
+fastapi>=0.141.1           # Web框架（含 Starlette、原生 WebSocket）
+uvicorn>=0.52.4            # ASGI 服务器（勿装 uvicorn[standard]：uvloop 不支持 Windows）
+websockets>=17.1           # ASGI WebSocket 实现（uvicorn 默认不带，前后台实时推送必需）
+jinja2>=3.1.6              # 模板渲染
 
 # 系统监控
-psutil>=5.9.0              # 跨平台系统资源监控 (CPU/内存)
+psutil>=7.2.2              # 跨平台系统资源监控 (CPU/内存/磁盘/网络)
+nvidia-ml-py>=13.610.43    # GPU 温度、功耗、利用率监控（pynvml，非 NVIDIA 环境自动降级）
+
+# 告警通知
+plyer>=2.1.0               # 跨平台系统通知弹窗
+
+# 报表导出
+openpyxl>=3.1.5            # XLSX 报表导出
 
 # 打包构建 (开发依赖)
-pyinstaller>=6.0            # 打包为单文件 .exe
+pyinstaller>=6.22.2        # 打包为单文件 .exe

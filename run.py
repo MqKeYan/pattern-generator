@@ -65,14 +65,15 @@ except ImportError:
     input("按回车键退出...")
     sys.exit(1)
 
-from version import VERSION
-from port_check import get_port_pids, show_port_status, kill_port_processes
-from instance_check import (
+from common.config import VERSION, load_settings, update_settings
+from common.startup import (
     detect_same_software_instances,
     write_instance_lock,
     remove_instance_lock,
+    get_port_pids,
+    show_port_status,
+    kill_port_processes,
 )
-from settings import load_settings, update_settings
 
 startup_settings = load_settings()
 PORT = startup_settings['port']
@@ -288,7 +289,7 @@ def main():
 
     # 初始化共享上下文与双服务
     import uvicorn
-    import app_context
+    from common import app_context
     from web.server import app as web_app
     from admin.server import create_admin_app
 

@@ -24,21 +24,45 @@ PROJECT_ROOT = os.getcwd()
 _MODULE_WHITELIST = [
     # 计算引擎
     'numpy',
-    # Web 框架
-    'flask', 'jinja2', 'markupsafe', 'werkzeug', 'blinker',
-    'click', 'itsdangerous',
-    # WSGI 服务器
-    'waitress',
+    # Web 框架（ASGI）
+    'fastapi', 'starlette', 'pydantic', 'pydantic_core', 'anyio', 'sniffio',
+    'uvicorn', 'h11', 'click', 'websockets',
+    # 模板
+    'jinja2', 'markupsafe',
     # 系统监控
-    'psutil',
+    'psutil', 'pynvml',
+    # 通知
+    'plyer',
+    # 报表
+    'openpyxl', 'et_xmlfile',
 ]
 
 # ============================================================
 # 子模块收集（解决动态导入问题）
 # ============================================================
 numpy_hidden = collect_submodules('numpy')
-flask_hidden = collect_submodules('flask')
+fastapi_hidden = collect_submodules('fastapi')
+uvicorn_hidden = collect_submodules('uvicorn')
+websockets_hidden = collect_submodules('websockets')
+pydantic_hidden = collect_submodules('pydantic') + collect_submodules('pydantic_core')
 jinja2_hidden = collect_submodules('jinja2')
+
+# 启动脚本在 main() 中导入服务模块，显式声明避免打包时遗漏最新路由
+project_hidden = [
+    'common.app_context',
+    'common.config',
+    'common.startup',
+    'common.security',
+    'common.persistence',
+    'web.server',
+    'admin.server',
+    'admin.tasks',
+    'admin.clients',
+    'admin.access_control',
+    'admin.notifications',
+    'admin.logger',
+    'admin.result_store',
+]
 
 # PyTorch依赖的标准库模块
 stdlib_hidden = [
@@ -47,8 +71,7 @@ stdlib_hidden = [
 
 # 排除torch相关模块（由用户自行安装）
 excludes_list = [
-    'torch', 'torchvision', 'torchaudio',
-    'torch.*', 'torchvision.*', 'torchaudio.*',
+    'torch', 'torch.*',
     'nvidia', 'cuda', 'cudnn', 'triton'
 ]
 
@@ -92,6 +115,8 @@ print(f"[spec] 将排除: {len(_whitelist_excludes)} 个无关第三方模块")
 ADDED_DATAS = [
     (os.path.join(PROJECT_ROOT, 'src', 'web', 'templates'), 'src/web/templates'),
     (os.path.join(PROJECT_ROOT, 'src', 'web', 'static'), 'src/web/static'),
+    (os.path.join(PROJECT_ROOT, 'src', 'admin', 'templates'), 'src/admin/templates'),
+    (os.path.join(PROJECT_ROOT, 'src', 'admin', 'static'), 'src/admin/static'),
 ]
 
 # 应用名称（小写）
@@ -107,7 +132,7 @@ a = Analysis(
     pathex=[PROJECT_ROOT, os.path.join(PROJECT_ROOT, 'src')],
     binaries=[],
     datas=ADDED_DATAS,
-    hiddenimports=numpy_hidden + flask_hidden + jinja2_hidden + stdlib_hidden,
+    hiddenimports=numpy_hidden + fastapi_hidden + uvicorn_hidden + websockets_hidden + pydantic_hidden + jinja2_hidden + stdlib_hidden + project_hidden,
     hookspath=[],
     hooksconfig={},
     excludes=final_excludes,
