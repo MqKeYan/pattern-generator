@@ -120,7 +120,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cu132
 python run.py
 ```
 
-시작 후 브라우저에서 **메인 화면 http://localhost:5000**, **관리 센터 http://127.0.0.1:5001** 에 접속하세요.
+시작 후 브라우저에서 메인 화면 http://localhost:5000, 관리 센터 http://127.0.0.1:5001 에 접속하세요.
 
 > 개발자 참고: `run.py`는 두 개의 Uvicorn 서비스를 함께 시작합니다. 관리 센터에서 `config/settings.json`을 변경한 뒤에는 재시작이 필요합니다.
 

@@ -120,7 +120,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cu132
 python run.py
 ```
 
-啟動後，以瀏覽器存取 **主介面 http://localhost:5000**，**後台 http://127.0.0.1:5001**。
+啟動後，以瀏覽器存取 主介面 http://localhost:5000，後台 http://127.0.0.1:5001。
 
 > 開發者提示：`run.py` 會同時啟動兩個 Uvicorn 服務；後台修改 `config/settings.json` 後需重啟生效。
 

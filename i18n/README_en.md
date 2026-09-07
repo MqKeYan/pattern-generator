@@ -120,7 +120,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cu132
 python run.py
 ```
 
-After startup, visit **Main UI http://localhost:5000** and **Admin http://127.0.0.1:5001**.
+After startup, visit Main UI http://localhost:5000 and Admin http://127.0.0.1:5001.
 
 > Developer note: `run.py` starts two Uvicorn services; restart is required after editing `config/settings.json` in the admin.
 
