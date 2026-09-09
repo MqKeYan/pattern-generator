@@ -1,23 +1,23 @@
-# Python 字节码
+# Python
 __pycache__/
 *.pyc
 
-# PyInstaller 打包产物（软件运行产物，不纳入打包/提交）
+# PyInstaller
 dist/
 build/
 *.manifest
 *.pyinstaller
 
-# 运行时临时文件（软件运行产物）
+# 运行时临时文件
 temp/
 *.log
 log/
 config/
 
-# 环境变量（敏感信息）
+# 环境变量
 .env
 
-# Python 包信息
+# Python
 *.egg-info/
 
 # 虚拟环境
@@ -34,4 +34,5 @@ Thumbs.db
 
 # 测试
 tests/
+!tests/
 .pytest_cache/
