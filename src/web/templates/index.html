@@ -5,238 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>斑图形成可视化系统</title>
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
-    <!-- 预加载思源黑体，减少字体等待时间 -->
     <link rel="preload" href="/static/fonts/NotoSansCJK-VF.otf.ttc" as="font" type="font/collection" crossorigin>
-    <!-- Plotly.js（本地，避免CDN加载慢） -->
-    <script src="/static/js/plotly.min.js"></script>
-    <!-- 样式 -->
-    <link rel="stylesheet" href="/static/css/style.css?v={{ init_config.asset_ver }}">
+    <script src="/static/js/vendor/plotly.min.js"></script>
+    <script src="/static/js/shared/common.js?v={{ init_config.asset_ver }}"></script>
+    <link rel="stylesheet" href="/static/css/shared/base.css?v={{ init_config.asset_ver }}">
+    <link rel="stylesheet" href="/static/css/shared/components.css?v={{ init_config.asset_ver }}">
+    <link rel="stylesheet" href="/static/css/shared/motion.css?v={{ init_config.asset_ver }}">
+    <link rel="stylesheet" href="/static/css/app/layout.css?v={{ init_config.asset_ver }}">
+    <link rel="stylesheet" href="/static/css/app/pages.css?v={{ init_config.asset_ver }}">
 </head>
 <body class="workspace-page">
-    <!-- 主容器 -->
     <div class="app-container">
-        <!-- ===== 左侧控制面板 ===== -->
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <h1 class="app-title" data-i18n="app_title">斑图形成可视化系统</h1>
-                <div class="client-card">
-                    <div class="status-grid" id="info-grid">
-                        <span class="status-k" data-i18n="info_version">软件版本</span><span class="status-v" data-i18n="loading">加载中...</span>
-                        <span class="status-k" data-i18n="info_client_id">客户端号</span><span class="status-v" data-i18n="loading">加载中...</span>
-                        <span class="status-k" data-i18n="info_python">Python 版本</span><span class="status-v" data-i18n="loading">加载中...</span>
-                        <span class="status-k" data-i18n="info_cuda">CUDA 版本</span><span class="status-v" data-i18n="loading">加载中...</span>
-                        <span class="status-k" data-i18n="info_pytorch">Pytorch 版本</span><span class="status-v" data-i18n="loading">加载中...</span>
-                        <span class="status-k" data-i18n="info_cpu">CPU 型号</span><span class="status-v" data-i18n="loading">加载中...</span>
-                        <span class="status-k" data-i18n="info_gpu">GPU 型号</span><span class="status-v" data-i18n="loading">加载中...</span>
-                        <span class="status-k" data-i18n="info_hardware">计算硬件</span><span class="status-v" data-i18n="loading">加载中...</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="sidebar-scroll">
-                <!-- 模型选择 -->
-                <section class="panel-card">
-                    <h3 class="card-title" data-i18n="model_select">模型选择</h3>
-                    <div class="custom-select" id="model-select">
-                        <div class="custom-select-trigger">
-                            <span class="selected-text">模型1·R-M型</span>
-                        </div>
-                        <div class="custom-select-options"></div>
-                    </div>
-                </section>
-
-                <!-- 参数设置 -->
-                <section class="panel-card">
-                    <h3 class="card-title" data-i18n="params_setting">参数设置</h3>
-                    <div id="params-container"></div>
-                    <button class="btn btn-outline btn-danger" id="reset-params" data-impact="caution" data-i18n="reset_params">重置参数</button>
-                </section>
-
-                <!-- 初始值范围 -->
-                <section class="panel-card">
-                    <h3 class="card-title" data-i18n="init_range">初始值范围</h3>
-                    <p class="init-desc" id="init-desc"></p>
-                    <div class="init-grid">
-                        <label data-i18n="x_min">X 最小值</label>
-                        <input type="number" id="x-min" step="0.01" class="num-input">
-                        <label data-i18n="x_max">X 最大值</label>
-                        <input type="number" id="x-max" step="0.01" class="num-input">
-                        <label data-i18n="y_min">Y 最小值</label>
-                        <input type="number" id="y-min" step="0.01" class="num-input">
-                        <label data-i18n="y_max">Y 最大值</label>
-                        <input type="number" id="y-max" step="0.01" class="num-input">
-                    </div>
-                    <button class="btn btn-outline btn-info" id="apply-best-init" data-impact="normal" data-i18n="apply_best_init">应用最佳初始值</button>
-                </section>
-
-                <!-- 跟踪点设置 -->
-                <section class="panel-card">
-                    <h3 class="card-title" data-i18n="track_points">时间演化跟踪点</h3>
-                    <div class="track-inputs">
-                        <label data-i18n="coord_x">X坐标</label>
-                        <input type="number" id="track-x" value="50" min="0" max="99" class="num-input">
-                        <label data-i18n="coord_y">Y坐标</label>
-                        <input type="number" id="track-y" value="50" min="0" max="99" class="num-input">
-                    </div>
-                    <div class="btn-row">
-                        <button class="btn btn-outline btn-primary" id="add-track" data-impact="normal" data-i18n="add">添加</button>
-                        <button class="btn btn-outline btn-danger" id="clear-track" data-impact="caution" data-i18n="clear">清空</button>
-                    </div>
-                    <ul class="track-list" id="track-list" data-i18n="track_list_center">当前跟踪点: 中心点(50,50)</ul>
-                </section>
-
-                <!-- 迭代次数 -->
-                <section class="panel-card">
-                    <h3 class="card-title" data-i18n="iterations">迭代次数</h3>
-                    <div class="range-container">
-                        <input type="range" id="iter-range" min="1" max="50000" value="9000" class="range-input">
-                        <input type="number" id="iter-value" value="9000" min="1" max="50000" class="num-input num-inline">
-                    </div>
-                    <button class="btn btn-outline btn-info" id="reset-iters" data-impact="normal" data-i18n="reset_iters">应用推荐值</button>
-                </section>
-
-                <!-- 动画设置 -->
-                <section class="panel-card">
-                    <h3 class="card-title" data-i18n="anim_setting">动画设置</h3>
-                    <div class="init-grid">
-                        <label data-i18n="anim_start">起始迭代</label>
-                        <input type="number" id="anim-start" value="0" min="0" class="num-input">
-                        <label data-i18n="anim_end">结束迭代</label>
-                        <input type="number" id="anim-end" value="300" min="1" max="20000" class="num-input">
-                        <label data-i18n="anim_frames">帧数</label>
-                        <input type="number" id="anim-frames" value="300" min="1" max="1000" class="num-input">
-                    </div>
-                </section>
-
-                <!-- 控制面板 -->
-                <section class="panel-card control-section">
-                    <h3 class="card-title" data-i18n="control_panel">控制面板</h3>
-                    <button class="btn btn-outline btn-success" id="run-sim" data-impact="normal" data-i18n="run_sim">
-                        运行模拟
-                    </button>
-                    <button class="btn btn-outline btn-success" id="run-anim" data-impact="normal" data-i18n="run_anim">
-                        开始动画
-                    </button>
-                    <button class="btn btn-outline btn-danger" id="reset-all" data-impact="caution" data-i18n="reset_all">
-                        重置所有
-                    </button>
-                    <button class="btn btn-outline btn-danger" id="clean-cache" data-impact="caution" data-i18n="clean_cache">
-                        清理缓存
-                    </button>
-                    <button class="btn btn-outline btn-white" id="software-settings" data-impact="low" data-i18n="software_settings">
-                        软件设置
-                    </button>
-                    <div class="status-text" id="status-msg" data-i18n="status_ready">就绪，请选择参数运行模拟</div>
-                </section>
-            </div>
-        </aside>
-
-        <!-- ===== 右侧可视化区域 ===== -->
+        {% include 'components/sidebar.html' %}
         <main class="main-content">
-            <!-- 标签导航 -->
-            <nav class="tab-nav">
-                <button class="tab-btn active" data-impact="low" data-tab="tab-2d" data-i18n="tab_2d">二维斑图</button>
-                <button class="tab-btn" data-impact="low" data-tab="tab-3d" data-i18n="tab_3d">三维斑图</button>
-                <button class="tab-btn" data-impact="low" data-tab="tab-anim" data-i18n="tab_anim">动画演示</button>
-            </nav>
-
-            <!-- 二维斑图面板 -->
-            <div class="tab-panel active" id="tab-2d">
-                <div class="viz-grid-2d">
-                    <div class="chart-box" id="chart-x-pop"></div>
-                    <div class="chart-box" id="chart-y-pop"></div>
-                    <div class="chart-box" id="chart-combined"></div>
-                </div>
-                <div class="chart-box chart-full" id="chart-evolution"></div>
-            </div>
-
-            <!-- 三维斑图面板 -->
-            <div class="tab-panel" id="tab-3d">
-                <div class="chart-box chart-full chart-3d" id="chart-3d"></div>
-            </div>
-
-            <!-- 动画面板 -->
-            <div class="tab-panel" id="tab-anim">
-                <div class="anim-control-bar">
-                    <button class="btn btn-outline btn-success" id="anim-play" data-impact="low"><span data-i18n="play">播放</span></button>
-                    <button class="btn btn-outline btn-warning" id="anim-pause" data-impact="low" data-i18n="pause">暂停</button>
-                    <span class="anim-frame-info" id="anim-frame-info">帧: 0 / 0</span>
-                    <input type="range" id="anim-slider" min="0" max="100" value="0" class="anim-slider">
-                    <span class="anim-speed-label" data-i18n="speed">速度:</span>
-                    <input type="number" id="anim-speed" value="200" min="50" max="1000" step="50" class="num-input num-xs">
-                    <span>ms</span>
-                </div>
-                <div class="viz-grid-2d">
-                    <div class="chart-box" id="chart-anim-x"></div>
-                    <div class="chart-box" id="chart-anim-y"></div>
-                    <div class="chart-box" id="chart-anim-combined"></div>
-                </div>
-                <div class="chart-box chart-full" id="chart-anim-evo"></div>
-            </div>
+            {% include 'tabs/navigation.html' %}
+            {% include 'tabs/pattern-2d.html' %}
+            {% include 'tabs/pattern-3d.html' %}
+            {% include 'tabs/animation.html' %}
         </main>
     </div>
-
-    <!-- Toast提示 -->
-    <div class="toast-container" id="toast-container"></div>
-
-    <!-- 加载遮罩 -->
-    <div class="loading-overlay" id="loading-overlay">
-        <div class="loading-spinner"></div>
-        <p id="loading-text" data-i18n="computing">计算中...</p>
-        <button class="btn btn-outline btn-danger" id="loading-cancel" data-impact="caution" style="display:none;" data-i18n="cancel_task">取消任务</button>
-    </div>
-
-    <!-- 脚本 -->
-    <!-- 页面渲染前恢复上次标签位置，刷新时完全保持位置不变 -->
-    <script>
-        (function () {
-            const savedTab = sessionStorage.getItem('active_tab');
-            if (savedTab && document.getElementById(savedTab)) {
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === savedTab));
-                document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === savedTab));
-            }
-        })();
-    </script>
-    <!-- 服务端内联配置：app.js初始化时同步读取，刷新首帧即渲染完整侧边栏 -->
-    <script>
-        window.INIT_CONFIG = {{ init_config | tojson }};
-    </script>
-    <script src="/static/js/i18n.js?v={{ init_config.version }}"></script>
-    <script src="/static/js/app.js?v={{ init_config.version }}"></script>
-
-    <!-- 软件设置弹窗 -->
-    <div id="settings-modal" class="modal-overlay">
-        <div class="modal-content" id="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title" data-i18n="software_settings">软件设置</h3>
-            </div>
-            <div class="settings-item">
-                <label data-i18n="language">语言</label>
-                <div class="custom-select" id="language-select">
-                    <div class="custom-select-trigger">
-                        <span class="selected-text">简体中文</span>
-                    </div>
-                    <div class="custom-select-options">
-                        <div class="custom-select-option selected" data-value="zh-CN" data-i18n="language_zh_cn">简体中文</div>
-                        <div class="custom-select-option" data-value="zh-TW" data-i18n="language_zh_tw">繁体中文</div>
-                        <div class="custom-select-option" data-value="en" data-i18n="language_en">英文</div>
-                        <div class="custom-select-option" data-value="ja" data-i18n="language_ja">日语</div>
-                        <div class="custom-select-option" data-value="ko" data-i18n="language_ko">韩语</div>
-                    </div>
-                </div>
-            </div>
-            <div class="settings-item">
-                <label data-i18n="client_name">客户端名称</label>
-                <input type="text" id="client-name-input" maxlength="40" class="num-input">
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-outline btn-danger" id="restore-default" data-impact="caution" data-i18n="restore_default">恢复默认</button>
-                <div class="modal-buttons">
-                    <button class="btn btn-outline btn-info" id="settings-cancel" data-impact="low" data-i18n="cancel">取消</button>
-                    <button class="btn btn-outline btn-success" id="settings-save" data-impact="normal" data-i18n="save">保存</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    {% include 'components/feedback.html' %}
+    {% include 'scripts/page-state.html' %}
+    {% include 'components/settings-modal.html' %}
+    {% include 'components/notification-settings-modal.html' %}
 </body>
 </html>

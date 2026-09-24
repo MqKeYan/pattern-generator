@@ -1,0 +1,30 @@
+
+            <!-- 3. 任务队列 -->
+            <div class="tab-panel" id="tab-tasks">
+                <section class="panel-card">
+                    <h3 class="card-title">操作</h3>
+                    <div class="btn-row task-actions">
+                        <button class="btn btn-outline btn-white" id="task-refresh" data-impact="low">刷新任务</button>
+                        <button class="btn btn-outline btn-success" id="task-retry-dead" data-impact="normal">重试失败任务</button>
+                        <button class="btn btn-outline btn-warning" id="task-clear-queue" data-impact="caution">清空等待队列</button>
+                        <button class="btn btn-outline btn-danger" id="task-cancel-all" data-impact="danger">中断所有任务</button>
+                        <button class="btn btn-outline btn-danger" id="task-clear-dead" data-impact="danger">清空死信队列</button>
+                    </div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">运行中任务</h3>
+                    <div class="table-wrap"><table class="admin-table" id="table-running"></table></div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">等待中任务</h3>
+                    <div class="table-wrap"><table class="admin-table" id="table-waiting"></table></div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">近期任务</h3>
+                    <div class="table-wrap"><table class="admin-table" id="table-history"></table></div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">死信队列</h3>
+                    <div class="table-wrap"><table class="admin-table" id="table-dead"></table></div>
+                </section>
+            </div>

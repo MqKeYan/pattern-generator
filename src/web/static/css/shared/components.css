@@ -1,0 +1,332 @@
+/* 通用组件：按钮、表单、勾选框、状态提示、自定义下拉 */
+
+/* 按钮与影响等级配色 */
+/* === 按钮 === */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    /* 全局统一按钮高度：固定 37px，内容垂直居中，内边距不再影响高度 */
+    height: 37px;
+    box-sizing: border-box;
+    padding: 0 16px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.2;
+    font-weight: 500;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: transform var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+    outline: none;
+    width: 100%;
+    margin-bottom: 8px;
+    letter-spacing: 0.2px;
+    background: rgba(20, 31, 49, 0.58);
+    box-shadow: var(--glass-highlight), 0 2px 10px rgba(0, 0, 0, 0.22);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+.btn:last-child {
+    margin-bottom: 0;
+}
+.btn:active {
+    transform: scale(0.97);
+}
+.btn-outline {
+    border-color: var(--color-border);
+}
+.btn-outline:hover {
+    border-color: var(--color-border-hover);
+}
+
+/* 按钮语义色只定义初始文字颜色，悬停状态不改变文字颜色。 */
+.btn-primary { color: var(--color-primary); }
+.btn-danger { color: var(--color-danger); }
+.btn-success { color: var(--color-success); }
+.btn-accent { color: var(--color-accent); }
+.btn-info { color: #f5c518; }
+.btn-white { color: #ffffff; }
+.btn-warning { color: var(--color-warning); }
+
+/* === 按钮影响等级 ===
+   业务只声明 data-impact，颜色由共享规范自动映射，前后台保持一致。 */
+button[data-impact="low"],
+a.btn[data-impact="low"] {
+    color: var(--action-low);
+}
+button[data-impact="normal"],
+a.btn[data-impact="normal"] {
+    color: var(--action-normal);
+}
+button[data-impact="caution"],
+a.btn[data-impact="caution"] {
+    color: var(--action-caution);
+}
+button[data-impact="danger"],
+a.btn[data-impact="danger"] {
+    color: var(--action-danger);
+}
+.btn-row {
+    display: flex;
+    gap: 8px;
+}
+.btn-row .btn {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+/* 输入控件：文本、数字、范围 */
+/* === 输入控件 === */
+.select-input {
+    width: 100%;
+    height: var(--form-control-height);
+    padding: 8px 12px;
+    background: var(--color-surface-2);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: 16px;
+    cursor: pointer;
+    transition: border-color var(--transition-fast);
+    outline: none;
+    box-shadow: var(--glass-highlight);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+.select-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-glow);
+}
+.num-input {
+    width: 100%;
+    height: var(--form-control-height);
+    padding: 6px 10px;
+    background: var(--color-surface-2);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
+    font-size: 16px;
+    outline: none;
+    transition: border-color var(--transition-fast);
+    box-shadow: var(--glass-highlight);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+.num-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-glow);
+}
+.num-inline {
+    width: 80px;
+    text-align: center;
+}
+.num-xs {
+    width: 60px;
+    text-align: center;
+}
+
+.range-input {
+    width: 100%;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+.range-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+/* 全局勾选框 */
+/* === 全局勾选框：复用深色面板、主蓝色与焦点环 === */
+input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-grid;
+    place-content: center;
+    box-sizing: border-box;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    flex: 0 0 16px;
+    border: 1px solid var(--color-border-hover);
+    border-radius: 4px;
+    background: rgba(8, 13, 22, 0.86);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), transform 0.12s ease;
+}
+input[type="checkbox"]::before {
+    content: '';
+    width: 8px;
+    height: 4px;
+    margin-top: -2px;
+    border: solid #fff;
+    border-width: 0 0 2px 2px;
+    transform: rotate(-45deg) scale(0);
+    transform-origin: center;
+    transition: transform 0.12s ease;
+}
+input[type="checkbox"]:hover:not(:checked):not(:disabled) {
+    border-color: var(--color-primary);
+    background: rgba(59, 139, 235, 0.1);
+}
+input[type="checkbox"]:checked,
+input[type="checkbox"]:indeterminate {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(59, 139, 235, 0.16);
+}
+input[type="checkbox"]:checked::before {
+    transform: rotate(-45deg) scale(1);
+}
+input[type="checkbox"]:indeterminate::before {
+    width: 8px;
+    height: 2px;
+    margin: 0;
+    border: 0;
+    background: #fff;
+    transform: scaleX(1);
+}
+input[type="checkbox"]:active:not(:disabled) {
+    transform: scale(0.9);
+}
+input[type="checkbox"]:focus-visible {
+    outline: 2px solid rgba(116, 170, 255, 0.9);
+    outline-offset: 2px;
+}
+input[type="checkbox"]:disabled {
+    border-color: var(--color-border);
+    background: rgba(16, 24, 38, 0.54);
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* 状态提示文字 */
+.status-text {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: rgba(20, 31, 49, 0.58);
+    border: 1px solid rgba(164, 190, 232, 0.1);
+    box-shadow: var(--glass-highlight);
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    color: var(--color-text-muted);
+    text-align: center;
+}
+.status-text.success { color: var(--color-success); }
+.status-text.error { color: var(--color-danger); }
+.status-text.info { color: var(--color-info); }
+
+/* 自定义下拉组件 */
+/* === 自定义下拉组件 === */
+.custom-select {
+    position: relative;
+    width: 100%;
+}
+.custom-select-trigger {
+    width: 100%;
+    height: var(--form-control-height);
+    padding: 8px 12px;
+    background: var(--color-surface-2);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: 16px;
+    cursor: pointer;
+    transition: border-color var(--transition-fast);
+    outline: none;
+    box-shadow: var(--glass-highlight);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.custom-select-trigger:hover {
+    border-color: var(--color-border-hover);
+}
+.custom-select-trigger.active {
+    border-color: var(--color-primary);
+}
+.custom-select-trigger::after {
+    content: '';
+    border: 5px solid transparent;
+    border-top-color: var(--color-text);
+    margin-left: 8px;
+}
+.custom-select-trigger.active::after {
+    border-top-color: transparent;
+    border-bottom-color: var(--color-text);
+}
+.custom-select-options {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    background: #192335;
+    border: 1px solid var(--color-border);
+    border-radius: var(--glass-radius);
+    box-shadow: var(--shadow-lg), var(--glass-highlight);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    overflow-y: auto;
+    display: none;
+    z-index: 10002;
+}
+.custom-select-options.show {
+    display: block;
+    animation: dropdownFadeIn 0.2s ease;
+}
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.custom-select-option {
+    height: var(--form-control-height);
+    padding: 0 12px;
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+    color: var(--color-text);
+    border-bottom: 1px solid rgba(164, 190, 232, 0.1);
+    display: flex;
+    align-items: center;
+}
+.custom-select-option:last-child {
+    border-bottom: none;
+}
+.custom-select-option:hover {
+    background: rgba(59, 139, 235, 0.15);
+    color: var(--color-primary);
+}
+.custom-select-option.selected {
+    background: rgba(59, 139, 235, 0.25);
+    color: var(--color-primary);
+}
+.custom-select-empty {
+    height: var(--form-control-height);
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    font-size: 14px;
+    cursor: default;
+    user-select: none;
+}

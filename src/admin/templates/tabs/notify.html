@@ -1,0 +1,47 @@
+
+            <!-- 6. 告警通知 -->
+            <div class="tab-panel" id="tab-notify">
+                <section class="panel-card">
+                    <h3 class="card-title">通知渠道</h3>
+                    <div class="notify-option-grid">
+                        <label class="settings-checkbox"><input type="checkbox" id="nf-toast"><span>Windows 系统通知</span></label>
+                        <label class="settings-checkbox"><input type="checkbox" id="nf-sound"><span>Windows 系统声音</span></label>
+                        <label class="settings-checkbox"><input type="checkbox" id="nf-browser"><span>后台浏览器系统通知</span></label>
+                    </div>
+                    <button class="btn btn-outline btn-info" id="nf-open-channels" type="button" data-impact="low">管理第三方推送</button>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">告警事件</h3>
+                    <div class="notify-option-grid notify-event-grid">
+                        <label class="settings-checkbox"><input type="checkbox" class="nf-event" value="queue_backlog"><span>队列积压</span></label>
+                        <label class="settings-checkbox"><input type="checkbox" class="nf-event" value="cpu_overload"><span>CPU 负载过高</span></label>
+                        <label class="settings-checkbox"><input type="checkbox" class="nf-event" value="memory_pressure"><span>内存压力过高</span></label>
+                        <label class="settings-checkbox"><input type="checkbox" class="nf-event" value="swap_pressure"><span>交换区压力过高</span></label>
+                        <label class="settings-checkbox"><input type="checkbox" class="nf-event" value="disk_space_low"><span>磁盘空间不足</span></label>
+                        <label class="settings-checkbox"><input type="checkbox" class="nf-event" value="gpu_overheat"><span>GPU 过热</span></label>
+                        <label class="settings-checkbox"><input type="checkbox" class="nf-event" value="gpu_memory_pressure"><span>GPU 显存压力过高</span></label>
+                        <label class="settings-checkbox"><input type="checkbox" class="nf-event" value="gpu_power_high"><span>GPU 功耗偏高</span></label>
+                        <label class="settings-checkbox"><input type="checkbox" class="nf-event" value="cpu_power_high"><span>CPU 功耗偏高</span></label>
+                        <label class="settings-checkbox"><input type="checkbox" class="nf-event" value="client_kicked"><span>客户端被踢出</span></label>
+                    </div>
+                    <div class="form-grid notify-fields">
+                        <label>队列积压阈值（等待任务数）</label><input type="number" id="nf-backlog" class="num-input">
+                        <label>GPU 温度阈值（℃）</label><input type="number" id="nf-gpu-temp" class="num-input">
+                        <label>CPU 负载阈值（%）</label><input type="number" id="nf-cpu" class="num-input">
+                        <label>内存使用阈值（%）</label><input type="number" id="nf-memory" class="num-input">
+                        <label>交换区使用阈值（%）</label><input type="number" id="nf-swap" class="num-input">
+                        <label>磁盘使用阈值（%）</label><input type="number" id="nf-disk" class="num-input">
+                        <label>GPU 显存阈值（%）</label><input type="number" id="nf-gpu-memory" class="num-input">
+                        <label>GPU 功耗阈值（静态上限 %）</label><input type="number" id="nf-gpu-power" class="num-input">
+                        <label>CPU 功耗阈值（静态上限 %）</label><input type="number" id="nf-cpu-power" class="num-input">
+                    </div>
+                    <div class="btn-row notify-actions">
+                        <button class="btn btn-outline btn-success" id="nf-save" data-impact="normal">保存通知设置</button>
+                        <button class="btn btn-outline btn-info" id="nf-test" data-impact="caution">测试推送</button>
+                    </div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">最近告警</h3>
+                    <div class="table-wrap"><table class="admin-table" id="table-alerts"></table></div>
+                </section>
+            </div>

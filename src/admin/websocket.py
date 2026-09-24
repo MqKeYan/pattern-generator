@@ -90,7 +90,7 @@ async def push_loop(manager, app_context, interval=1.0):
             counts = task_queue.counts()
             full_metrics = {
                 'type': 'metrics',
-                'started_at': STARTED_AT,
+                'started_at': app_context.get('started_at') or STARTED_AT,
                 'current': monitor.get_metrics(),
                 'history': monitor.get_history(),
                 'peaks': monitor.get_peaks(),

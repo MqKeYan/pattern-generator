@@ -1,0 +1,46 @@
+            <!-- 1. 概览 -->
+            <div class="tab-panel active" id="tab-overview">
+                <div class="stat-cards" id="ov-metric-cards"></div>
+                <div class="stat-cards" id="ov-count-cards"></div>
+                <section class="panel-card">
+                    <h3 class="card-title">累计统计</h3>
+                    <div class="stat-cards" id="ov-total-cards"></div>
+                </section>
+                <div class="overview-actions-grid">
+                    <section class="panel-card">
+                        <h3 class="card-title">快捷操作</h3>
+                        <div class="quick-actions">
+                        <button class="btn btn-outline btn-warning" id="op-clear-cache" data-impact="caution">清理全局缓存</button>
+                            <button class="btn btn-outline btn-warning" id="op-reset-counters" data-impact="caution">重置计数</button>
+                            <button class="btn btn-outline btn-warning" id="op-clear-queue" data-impact="caution">清空等待队列</button>
+                            <button class="btn btn-outline btn-danger" id="op-cancel-all" data-impact="danger">中断所有任务</button>
+                            <button class="btn btn-outline btn-danger" id="op-clear-stats" data-impact="danger">清除数据</button>
+                            <button class="btn btn-outline btn-danger" id="op-shutdown" data-impact="danger">停止所有服务</button>
+                        </div>
+                    </section>
+                    <section class="panel-card">
+                        <h3 class="card-title">报表导出</h3>
+                        <div class="report-actions">
+                            <div class="custom-select" id="report-type" value="clients">
+                                <div class="custom-select-trigger"><span class="selected-text">客户端活动报表</span></div>
+                                <div class="custom-select-options">
+                                    <div class="custom-select-option selected" data-value="clients">客户端活动报表</div>
+                                    <div class="custom-select-option" data-value="tasks">任务执行报表</div>
+                                    <div class="custom-select-option" data-value="system">系统资源报表</div>
+                                    <div class="custom-select-option" data-value="access">访问控制报表</div>
+                                    <div class="custom-select-option" data-value="alerts">告警事件报表</div>
+                                </div>
+                            </div>
+                            <div class="custom-select" id="report-format" value="csv">
+                                <div class="custom-select-trigger"><span class="selected-text">CSV</span></div>
+                                <div class="custom-select-options">
+                                    <div class="custom-select-option selected" data-value="csv">CSV</div>
+                                    <div class="custom-select-option" data-value="xlsx">Excel (XLSX)</div>
+                                    <div class="custom-select-option" data-value="json">JSON</div>
+                                </div>
+                            </div>
+                            <button class="btn btn-outline btn-info" id="op-export-report" data-impact="low">导出报表</button>
+                        </div>
+                    </section>
+                </div>
+            </div>

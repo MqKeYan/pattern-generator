@@ -1,0 +1,55 @@
+    <!-- 后台第三方推送管理弹窗 -->
+    <div class="modal-overlay" id="admin-notification-channel-modal" aria-hidden="true">
+        <section class="modal-content admin-notification-channel-modal-content" role="dialog" aria-modal="true" aria-labelledby="admin-notification-channel-title">
+            <div class="modal-header admin-notification-channel-header">
+                <h3 class="modal-title" id="admin-notification-channel-title">第三方推送设置</h3>
+            </div>
+            <p class="admin-modal-desc">管理后台告警发送到的多个第三方推送目标。</p>
+            <section class="admin-pushplus-manager">
+                <div class="admin-notification-channel-head">
+                    <h4 class="settings-section-title">第三方推送目标</h4>
+                    <button class="btn btn-outline btn-info admin-pushplus-add" id="nf-channel-add" type="button" data-impact="low">新增目标</button>
+                </div>
+                <div class="table-wrap admin-pushplus-table-wrap" id="nf-channel-list"></div>
+            </section>
+            <div class="modal-actions admin-notification-channel-actions">
+                <button class="btn btn-outline btn-danger" id="nf-channel-restore" type="button" data-impact="caution">清空第三方推送目标</button>
+                <div class="modal-buttons">
+                    <button class="btn btn-outline btn-info" id="nf-channel-cancel" type="button" data-impact="low">取消</button>
+                    <button class="btn btn-outline btn-success" id="nf-channel-settings-save" type="button" data-impact="normal">保存</button>
+                </div>
+            </div>
+        </section>
+    </div>
+    <div class="modal-overlay" id="admin-channel-editor-modal" aria-hidden="true">
+        <section class="modal-content admin-pushplus-target-editor-modal-content" role="dialog" aria-modal="true" aria-labelledby="nf-channel-editor-title">
+            <div class="modal-header admin-pushplus-target-editor-header" id="admin-channel-editor-header">
+                <h3 class="modal-title" id="nf-channel-editor-title">新增第三方推送目标</h3>
+            </div>
+            <section class="admin-notification-channel-card">
+                <div class="admin-notification-channel-fields">
+                    <label>平台
+                        <div class="custom-select" id="nf-channel-type">
+                            <div class="custom-select-trigger"><span class="selected-text">PushPlus Token</span></div>
+                            <div class="custom-select-options">
+                                <div class="custom-select-option selected" data-value="pushplus_token">PushPlus Token</div>
+                                <div class="custom-select-option" data-value="webhook">通用 Webhook</div>
+                                <div class="custom-select-option" data-value="email">SMTP 邮件</div>
+                                <div class="custom-select-option" data-value="telegram">Telegram</div>
+                                <div class="custom-select-option" data-value="discord">Discord</div>
+                                <div class="custom-select-option" data-value="dingtalk">钉钉机器人</div>
+                                <div class="custom-select-option" data-value="feishu">飞书机器人</div>
+                                <div class="custom-select-option" data-value="wecom">企业微信机器人</div>
+                            </div>
+                        </div>
+                    </label>
+                    <label>目标名称<input type="text" id="nf-channel-name" maxlength="40" class="num-input"></label>
+                </div>
+                <div class="admin-notification-channel-fields" id="nf-channel-fields"></div>
+                <div class="admin-pushplus-editor-actions">
+                    <button class="btn btn-outline btn-info" id="nf-channel-editor-cancel" type="button" data-impact="low">取消编辑</button>
+                    <button class="btn btn-outline btn-success" id="nf-channel-target-save" type="button" data-impact="normal">保存目标</button>
+                </div>
+            </section>
+        </section>
+    </div>

@@ -1,0 +1,19 @@
+
+            <!-- 动画面板 -->
+            <div class="tab-panel" id="tab-anim">
+                <div class="anim-control-bar">
+                    <button class="btn btn-outline btn-success" id="anim-play" data-impact="low"><span data-i18n="play">播放</span></button>
+                    <button class="btn btn-outline btn-warning" id="anim-pause" data-impact="low" data-i18n="pause">暂停</button>
+                    <span class="anim-frame-info" id="anim-frame-info">帧: 0 / 0</span>
+                    <input type="range" id="anim-slider" min="0" max="100" value="0" class="anim-slider">
+                    <span class="anim-speed-label" data-i18n="speed">速度:</span>
+                    <input type="number" id="anim-speed" value="200" min="50" max="1000" step="50" class="num-input num-xs">
+                    <span>ms</span>
+                </div>
+                <div class="viz-grid-2d">
+                    <div class="chart-box" id="chart-anim-x"></div>
+                    <div class="chart-box" id="chart-anim-y"></div>
+                    <div class="chart-box" id="chart-anim-combined"></div>
+                </div>
+                <div class="chart-box chart-full" id="chart-anim-evo"></div>
+            </div>

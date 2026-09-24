@@ -1,0 +1,569 @@
+/* 后台布局：骨架与响应式断点 */
+
+/* 后台独立框架样式 */
+
+.admin-page {
+    --admin-panel-background: #142033;
+    --admin-control-height: 37px;
+    --admin-control-font-size: 16px;
+    --admin-field-width: 240px;
+    --admin-field-wide-width: 360px;
+    --admin-list-field-width: 420px;
+    --admin-select-width: 240px;
+    --admin-select-wide-width: 420px;
+    --admin-action-min-width: 112px;
+}
+
+/* === 主布局 === */
+.app-container {
+    display: flex;
+    height: 100vh;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+}
+
+/* === 侧边栏 === */
+.sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--glass-radius);
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+    overflow: hidden;
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.sidebar-header {
+    padding: var(--space-3) var(--space-3) var(--space-2);
+    text-align: center;
+    border-bottom: 1px solid var(--color-border);
+    background: linear-gradient(145deg, rgba(66, 94, 137, 0.32), rgba(16, 24, 38, 0.1));
+    box-shadow: var(--glass-highlight);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.app-title {
+    font-family: var(--font-heading);
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--color-text);
+    letter-spacing: 0.5px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-info));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* 硬件与客户端信息卡片 */
+.client-card {
+    margin-top: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    text-align: left;
+    background: rgba(20, 31, 49, 0.58);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--color-primary);
+    box-shadow: var(--glass-highlight);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+
+/* 信息卡片：标签/数值两列网格（样式与后台管理中心卡片一致） */
+.status-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--space-1) var(--space-2);
+    font-size: 14px;
+}
+.status-grid .status-k { opacity: 0.65; }
+.status-grid .status-v {
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+    word-break: break-all;
+}
+
+.mobile-sidebar-toggle {
+    display: none;
+}
+
+.sidebar-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--panel-padding) var(--space-3);
+    background: rgba(10, 17, 29, 0.06);
+}
+
+/* === 面板卡片 === */
+.panel-card {
+    background: rgba(25, 35, 53, 0.38);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--panel-padding);
+    margin-bottom: var(--space-2);
+    box-shadow: var(--shadow-sm), var(--glass-highlight);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    transition: border-color var(--transition-fast), background-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.panel-card:hover {
+    border-color: var(--color-border-hover);
+    background: rgba(31, 46, 70, 0.56);
+    box-shadow: var(--shadow-md), var(--glass-highlight);
+}
+
+.card-title {
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin-bottom: 10px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+
+/* === 主内容区 === */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--glass-radius);
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+
+/* === 标签导航 === */
+.tab-nav {
+    display: flex;
+    gap: 2px;
+    height: 59px;
+    flex-shrink: 0;
+    padding: 12px 16px 0;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    border-radius: var(--glass-radius) var(--glass-radius) 0 0;
+    box-shadow: var(--glass-highlight);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.tab-btn {
+    height: 46px;
+    padding: 10px 20px;
+    background: transparent;
+    color: var(--color-text-muted);
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-family: var(--font-heading);
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+    letter-spacing: 0.3px;
+}
+.tab-btn:hover {
+    color: var(--color-plot-text);
+    background: rgba(44, 62, 92, 0.52);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.tab-btn.active {
+    color: var(--color-plot-text);
+    border-bottom-color: var(--color-primary);
+    background: rgba(29, 45, 69, 0.5);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+/* === 标签面板 === */
+.tab-panel {
+    display: none;
+    flex: 1;
+    overflow: auto;
+    padding: var(--tab-panel-inset);
+    background: var(--color-surface);
+    border-radius: 0 0 var(--glass-radius) var(--glass-radius);
+    box-shadow: var(--glass-highlight);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+.tab-panel.active {
+    display: flex;
+    flex-direction: column;
+}
+
+.tab-panel.is-resizing .chart-box {
+    visibility: hidden;
+}
+
+/* 后台管理中心扩展样式 —— 复用主界面 CSS 变量与毛玻璃主题 */
+
+/* ---------- 侧边栏导航与状态 ---------- */
+.admin-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 10px;
+}
+
+.admin-nav-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 44px;
+    padding: 0 14px 0 22px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-md);
+    background: var(--admin-panel-background);
+    color: var(--color-text-secondary);
+    text-align: left;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: transform var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+/* 中文字形的视觉中心略高于行盒中心，只下移文字，不移动竖向状态标记。 */
+.admin-nav-btn > span {
+    display: inline-block;
+    transform: translateY(2px);
+}
+
+.admin-nav-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 9px;
+    width: 3px;
+    height: 26px;
+    border-radius: 999px;
+    background: rgba(164, 190, 232, 0.34);
+    opacity: 0.72;
+    transform: translateY(-50%) scaleY(0.82);
+    transition: background-color var(--transition-fast), opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.admin-nav-btn::after {
+    content: '';
+    position: absolute;
+    top: 1px;
+    right: 12px;
+    left: 12px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.admin-nav-btn:hover {
+    background: rgba(86, 116, 160, 0.18);
+    border-color: rgba(164, 190, 232, 0.16);
+    transform: translateX(2px);
+}
+
+.admin-nav-btn:hover::before {
+    background: var(--color-primary);
+    opacity: 0.9;
+    transform: translateY(-50%) scaleY(1);
+}
+
+.admin-nav-btn.active {
+    color: var(--color-text-secondary);
+    background: var(--admin-panel-background);
+    border-color: rgba(52, 152, 219, 0.55);
+    font-weight: 600;
+}
+
+.admin-nav-btn.active::before {
+    background: var(--color-primary);
+    opacity: 1;
+    transform: translateY(-50%) scaleY(1);
+}
+
+.status-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    font-size: 14px;
+}
+
+.status-k { opacity: 0.65; }
+.status-v { font-variant-numeric: tabular-nums; text-align: right; }
+
+#service-info { gap: 6px 16px; }
+#service-info .status-v { text-align: left; }
+
+.ws-state {
+    margin-top: 10px;
+    font-size: 14px;
+    opacity: 0.75;
+}
+
+.ws-state.online { color: #2ecc71; }
+.ws-state.offline { color: #e74c3c; }
+
+/* 后台独立响应式样式 */
+
+/* === 响应式 === */
+@media (max-width: 1024px) {
+    .sidebar {
+        width: 340px;
+        min-width: 340px;
+    }
+    .viz-grid-2d {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+@media (max-width: 768px) {
+    .app-container {
+        flex-direction: column;
+    }
+    .sidebar {
+        width: 100%;
+        min-width: 100%;
+        max-height: 40vh;
+    }
+    .viz-grid-2d {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* === 2K 基准的流体布局，字号保持原始设计值 === */
+
+.sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+}
+
+.select-input,
+.custom-select-trigger { padding: var(--space-2); }
+.num-input { padding: var(--space-1) var(--space-2); }
+
+.range-container,
+.btn-row { gap: var(--space-2); }
+.range-container { margin-bottom: var(--space-2); }
+.init-desc { margin-bottom: var(--space-2); }
+.init-grid,
+.track-inputs { gap: var(--space-1) var(--space-2); margin-bottom: var(--space-2); }
+.param-row { gap: var(--space-1) var(--space-2); margin-bottom: var(--space-2); }
+
+.btn {
+    height: var(--button-height);
+    padding: 0 var(--space-3);
+    margin-bottom: var(--space-2);
+    font-size: var(--admin-control-font-size);
+}
+.track-ops button { height: var(--button-height); padding: var(--space-1) var(--space-3); }
+
+.tab-nav {
+    height: clamp(48px, 2.305vw, 59px);
+    padding: var(--space-2) var(--space-3) 0;
+}
+.tab-btn {
+    height: 46px;
+    padding: var(--space-2) clamp(12px, 0.781vw, 20px);
+}
+
+.viz-grid-2d { gap: var(--space-2); min-height: clamp(300px, 16.406vw, 420px); }
+.chart-box { min-height: clamp(200px, 9.766vw, 250px); }
+#tab-anim .viz-grid-2d > .chart-box { height: clamp(300px, 16.406vw, 420px); min-height: clamp(300px, 16.406vw, 420px); }
+.chart-full { margin-top: var(--space-2); min-height: clamp(260px, 13.672vw, 350px); }
+.chart-3d { min-height: clamp(360px, 21.484vw, 550px); }
+
+@media (max-width: 1366px), (max-height: 760px) {
+    :root {
+        --panel-padding: 10px;
+        --space-2: 8px;
+        --space-3: 12px;
+    }
+
+    .sidebar-header { padding: var(--space-2) var(--space-3); }
+    .sidebar-scroll { padding: var(--space-2) var(--space-3); }
+    .viz-grid-2d { grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 300px; }
+    .chart-full { min-height: 260px; }
+    .chart-3d { min-height: 360px; }
+}
+
+@media (max-width: 900px) {
+    .app-container { flex-direction: column; }
+    .sidebar { width: 100%; min-width: 100%; max-height: 38vh; }
+    .sidebar-scroll { overflow-y: auto; }
+    .tab-nav { overflow-x: auto; padding-inline: var(--space-2); }
+    .tab-btn { flex: 0 0 auto; white-space: nowrap; }
+    .viz-grid-2d { grid-template-columns: 1fr; min-height: 0; }
+    .chart-box,
+    #tab-anim .viz-grid-2d > .chart-box { min-height: 240px; height: 240px; }
+    .chart-full { min-height: 280px; }
+}
+
+/* === 手机竖屏布局：仅由浏览器设备识别后启用，桌面默认保持 PC 布局 === */
+html[data-device-layout="mobile-portrait"] body {
+    height: auto;
+    min-height: 100svh;
+    overflow: auto;
+}
+html[data-device-layout="mobile-portrait"] .app-container {
+    height: auto;
+    min-height: 100svh;
+    padding: 8px;
+    gap: 8px;
+    overflow: visible;
+}
+html[data-device-layout="mobile-portrait"] .sidebar {
+    width: 100%;
+    min-width: 100%;
+    max-height: none;
+    flex: 0 0 auto;
+}
+html[data-device-layout="mobile-portrait"] .sidebar.mobile-collapsed {
+    height: 112px;
+    min-height: 112px;
+    overflow: hidden;
+}
+html[data-device-layout="mobile-portrait"] .sidebar-header {
+    padding: 10px 12px;
+}
+html[data-device-layout="mobile-portrait"] .app-title {
+    line-height: 1.2;
+}
+html[data-device-layout="mobile-portrait"] .sidebar.mobile-collapsed .sidebar-header {
+    border-bottom: none;
+}
+html[data-device-layout="mobile-portrait"] .sidebar.mobile-collapsed .client-card,
+html[data-device-layout="mobile-portrait"] .sidebar.mobile-collapsed .sidebar-scroll {
+    display: none;
+}
+html[data-device-layout="mobile-portrait"] .mobile-sidebar-toggle {
+    display: block;
+    width: 100%;
+    height: 44px;
+    margin-top: 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-2);
+    color: var(--color-text-secondary);
+    font-family: var(--font-heading);
+    font-size: 16px;
+    cursor: pointer;
+}
+html[data-device-layout="mobile-portrait"] .main-content {
+    min-height: calc(100svh - 128px);
+    overflow: visible;
+}
+html[data-device-layout="mobile-portrait"] .tab-panel {
+    overflow: visible;
+}
+html[data-device-layout="mobile-portrait"] .tab-nav {
+    height: 56px;
+    padding: 8px 8px 0;
+}
+html[data-device-layout="mobile-portrait"] .tab-btn,
+html[data-device-layout="mobile-portrait"] .btn,
+html[data-device-layout="mobile-portrait"] .custom-select-trigger,
+html[data-device-layout="mobile-portrait"] .num-input {
+    min-height: 44px;
+    height: 44px;
+}
+html[data-device-layout="mobile-portrait"] .tab-btn {
+    padding-inline: 14px;
+}
+html[data-device-layout="mobile-portrait"] .chart-box,
+html[data-device-layout="mobile-portrait"] #tab-anim .viz-grid-2d > .chart-box {
+    height: min(58svh, 360px);
+    min-height: min(58svh, 360px);
+}
+html[data-device-layout="mobile-portrait"] .table-wrap {
+    overscroll-behavior-x: contain;
+}
+
+/* 二维页面：时间演化曲线占可视区域约三分之一。 */
+#tab-2d.active {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-2);
+}
+#tab-2d.active .viz-grid-2d {
+    min-height: 0;
+    height: auto;
+}
+#tab-2d.active .viz-grid-2d > .chart-box,
+#tab-2d.active #chart-evolution {
+    min-height: 0;
+}
+#tab-2d.active #chart-evolution {
+    margin-top: 0;
+}
+
+
+@media (max-width: 1366px), (max-height: 760px) {
+    .admin-nav-btn { padding: 8px 10px; }
+    .stat-cards { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+    #tab-monitor .monitor-grid { gap: 10px; }
+    #tab-monitor .chart-box { min-height: 110px; }
+    .log-stream { height: 450px; }
+}
+
+@media (max-width: 900px) {
+    .admin-nav { flex-direction: row; overflow-x: auto; margin-top: 0; }
+    .admin-nav-btn { flex: 0 0 auto; white-space: nowrap; }
+    .overview-actions-grid,
+    #tab-monitor .monitor-grid { grid-template-columns: 1fr; }
+    #tab-monitor .chart-box { min-height: 180px; }
+    .cpu-package-sections { grid-template-columns: 1fr; }
+    .cpu-core-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+    #tab-monitor.compact-monitor-mode .cpu-package-sections {
+        grid-template-columns: 1fr;
+    }
+    #tab-monitor.compact-monitor-mode .cpu-core-grid {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+    .form-grid { grid-template-columns: 1fr; }
+    .startup-settings-grid > .settings-checkbox { grid-column: auto; }
+    .admin-table .cell-actions { min-width: max-content; }
+}
+
+/* 手机竖屏下后台侧栏保持折叠，展开后使用横向导航。 */
+html[data-device-layout="mobile-portrait"] .admin-page .sidebar-scroll {
+    overflow: visible;
+}
+html[data-device-layout="mobile-portrait"] .admin-page .admin-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    margin-top: 0;
+}
+html[data-device-layout="mobile-portrait"] .admin-page .admin-nav-btn {
+    flex: 0 0 auto;
+    min-height: 44px;
+    height: 44px;
+    font-size: 16px;
+    white-space: nowrap;
+}
+html[data-device-layout="mobile-portrait"] .admin-page .monitor-category-nav {
+    margin-inline: calc(0px - var(--tab-panel-inset));
+}
+html[data-device-layout="mobile-portrait"] .admin-page .monitor-view-switch {
+    height: 44px;
+    min-height: 44px;
+}
+html[data-device-layout="mobile-portrait"] .admin-page .monitor-category-content {
+    gap: var(--space-2);
+}
+html[data-device-layout="mobile-portrait"] .admin-page .admin-table .cell-actions {
+    min-width: max-content;
+}

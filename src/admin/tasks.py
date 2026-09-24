@@ -4,7 +4,7 @@
 - 失败（非取消/超时）自动重试：重试期间状态回到 queued（retry_count 递增）。
 - 重试耗尽的终态失败任务 status='failed' 并进入死信队列（dead list），可手动重试或删除。
 - 暂停冻结：客户端 paused 时其任务保留队列位置但跳过执行，恢复后继续。
-- 结果生命周期：取走即释放；未取走的按 task_result_ttl_minutes 到期释放（标记 expired）。
+- 结果生命周期：完成后优先落盘并释放内存；未取走的按 task_result_ttl_minutes 到期标记 expired。
 
 task_fn 契约：接收 Task，返回可 JSON 序列化的结果 dict；
 取消时抛出 tasks.TaskCancelled（由 web 层把 core.simulation.SimulationCancelled 翻译为本异常）。
@@ -18,6 +18,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
 from core.simulation import estimate_host_ram_mb, estimate_vram_mb
+from admin.logger import task_mode_label
 
 FINISHED_STATUSES = ('completed', 'cancelled', 'timeout', 'failed', 'expired')
 _HISTORY_LIMIT = 500
@@ -110,13 +111,16 @@ class Task:
 
 
 class TaskQueue:
-    def __init__(self, logger, settings, clients, monitor, notifier=None, task_fn=None):
+    def __init__(self, logger, settings, clients, monitor, notifier=None, task_fn=None,
+                 result_persist=None, result_release=None):
         self.log = logger
         self.settings = settings
         self.clients = clients
         self.monitor = monitor
         self.notifier = notifier
         self.task_fn = task_fn
+        self.result_persist = result_persist
+        self.result_release = result_release
 
         self._tasks = {}          # task_id -> Task（全部已知任务）
         self._waiting = deque()   # 排队中的 task_id
@@ -130,6 +134,22 @@ class TaskQueue:
 
         # use_cuda 判定交给 task_fn 侧；队列只在有 GPU 信息时做显存预检
         self._use_cuda = monitor.gpu_count > 0
+
+    def _log_task(self, level, action, task, detail=None, exc_info=False):
+        """统一记录任务事件，固定模型、模式、设备、客户端和任务字段顺序。"""
+        segments = [task.model, task_mode_label(task.type)]
+        if task.gpu_id is not None:
+            segments.append(f'GPU{task.gpu_id}')
+        client = self.clients.get(task.client_id) if self.clients else None
+        getattr(self.log, f'{level}_event')(
+            action,
+            *segments,
+            client_id=task.client_id,
+            client_name=client.client_name if client else None,
+            task_id=task.task_id,
+            detail=detail,
+            exc_info=exc_info,
+        )
 
     # ---------- 生命周期 ----------
 
@@ -162,7 +182,7 @@ class TaskQueue:
                 callback(event_type, snapshot)
             except Exception as e:
                 if self.log:
-                    self.log.error(f'任务事件回调异常: {e}')
+                    self._log_task('error', 'task_callback_failed', task, detail={'error': e})
 
     # ---------- 提交与查询 ----------
 
@@ -184,7 +204,10 @@ class TaskQueue:
             if client:
                 client.total_tasks += 1
                 self.clients.mark_status(client_id, 'queued', task.task_id)
-        self.log.info(f"任务入队: {task.task_id[:8]} {task.type} {task.model} by {client_id[:8]}")
+        self._log_task(
+            'info', 'task_queued', task,
+            detail={'queue': self.queue_position(task.task_id)},
+        )
         self._emit('created', task)
         return task
 
@@ -245,14 +268,14 @@ class TaskQueue:
                 if self.clients:
                     self.clients.record_task_result(task.client_id, 'cancelled')
                     self.clients.mark_status(task.client_id, 'online')
-                self.log.info(f"任务取消: {task_id[:8]} ({by})")
+                self._log_task('info', 'task_cancelled', task, detail={'operator': by})
                 self._emit('cancelled', task)
                 self._prune_records()
                 return True, 'cancelled'
             if task.status == 'running':
                 task.by = by
                 task.cancel_event.set()
-                self.log.info(f"任务取消请求: {task_id[:8]} ({by}，等待迭代边界退出)")
+                self._log_task('info', 'task_cancel_requested', task, detail={'operator': by, 'wait': True})
                 return True, 'cancelling'
             return False, f'bad_status:{task.status}'
 
@@ -316,7 +339,7 @@ class TaskQueue:
             task.status = 'queued'
             task.created_at = time.time()
             self._waiting.append(task.task_id)
-        self.log.info(f"死信重试: {task_id[:8]}")
+        self._log_task('info', 'task_dead_retry', task)
         self._emit('created', task)
         return True
 
@@ -377,7 +400,7 @@ class TaskQueue:
                 self._expire_results()
                 self._try_dispatch()
             except Exception as e:
-                self.log.error(f'调度循环异常: {e}')
+                self.log.error_event('task_dispatch_failed', detail={'error': e})
             self._stop.wait(0.2)
 
     def _concurrency(self):
@@ -398,7 +421,7 @@ class TaskQueue:
             if task.started_at and now - task.started_at > limit and not task._timeout_flag:
                 task._timeout_flag = True
                 task.cancel_event.set()
-                self.log.warning(f"任务超时: {task.task_id[:8]} 超过 {limit}s")
+                self._log_task('warning', 'task_timeout', task, detail={'timeout': limit})
 
     def _expire_results(self):
         ttl = max(1, int(self.settings.get('task_result_ttl_minutes', 30))) * 60
@@ -406,15 +429,14 @@ class TaskQueue:
         with self._lock:
             expired = [
                 t for t in self._tasks.values()
-                if t.status == 'completed' and not t.delivered and t.result is not None
+                if t.status == 'completed' and not t.delivered
                 and t.completed_at and now - t.completed_at > ttl
             ]
         for task in expired:
             with task._lock:
-                if task.result is not None:
-                    task.result = None
-                    task.status = 'expired'
-            self.log.info(f"任务结果过期释放: {task.task_id[:8]}")
+                task.result = None
+                task.status = 'expired'
+            self._log_task('info', 'task_result_expired', task)
         if expired:
             self._prune_records()
 
@@ -467,27 +489,49 @@ class TaskQueue:
 
     def _run_task(self, task):
         try:
-            self.log.info(f"任务开始: {task.task_id[:8]} {task.type} {task.model}"
-                          + (f" GPU{task.gpu_id}" if task.gpu_id is not None else ""))
+            self._log_task('info', 'task_started', task)
             result = self.task_fn(task)
+            result_cached = False
+            if self.result_persist:
+                try:
+                    result_cached = bool(self.result_persist(task, result))
+                except Exception as exc:
+                    self._log_task('error', 'task_result_persist_failed', task, detail={'exception': type(exc).__name__})
+            if self.result_persist and not result_cached:
+                self._log_task('warning', 'task_result_memory_pending', task)
             with task._lock:
-                task.result = result
+                task.result = None if result_cached else result
             task.finish('completed')
+            if result_cached:
+                del result
+                if self.result_release:
+                    try:
+                        self.result_release()
+                    except Exception as exc:
+                        self._log_task('error', 'task_result_release_failed', task, detail={'exception': type(exc).__name__})
             if self.clients:
                 self.clients.record_task_result(task.client_id, 'success', task.completed_at - task.started_at)
                 self.clients.mark_status(task.client_id, 'online')
-            self.log.info(f"任务完成: {task.task_id[:8]} 耗时 {task.completed_at - task.started_at:.1f}s")
+            storage = 'disk' if result_cached else 'memory'
+            self._log_task(
+                'info', 'task_completed', task,
+                detail={'raw': f'{task.completed_at - task.started_at:.1f}s', 'storage': storage},
+            )
             self._emit('completed', task)
+            if self.notifier:
+                self.notifier.notify_client_task(task, 'completed')
         except TaskCancelled:
             status = 'timeout' if task._timeout_flag else 'cancelled'
             task.finish(status, '执行超时' if task._timeout_flag else '被取消')
             if self.clients:
                 self.clients.record_task_result(task.client_id, 'cancelled', task.completed_at - task.started_at)
                 self.clients.mark_status(task.client_id, 'online')
-            self.log.info(f"任务{status}: {task.task_id[:8]}")
+            self._log_task('info', 'task_timeout' if status == 'timeout' else 'task_cancelled', task)
             self._emit(status, task)
+            if self.notifier:
+                self.notifier.notify_client_task(task, status)
         except Exception as e:
-            self.log.error(f"任务失败: {task.task_id[:8]} {e}")
+            self._log_task('error', 'task_failed', task, detail={'error': e})
             max_retries = max(0, int(self.settings.get('task_retry_count', 1)))
             if task.retry_count < max_retries:
                 task.retry_count += 1
@@ -498,13 +542,11 @@ class TaskQueue:
                 task.started_at = None
                 with self._lock:
                     self._waiting.append(task.task_id)
-                self.log.info(f"任务重试: {task.task_id[:8]} 第 {task.retry_count}/{max_retries} 次")
+                self._log_task(
+                    'info', 'task_retry', task,
+                    detail={'attempt': f'{task.retry_count}/{max_retries}'},
+                )
                 self._emit('retry', task)
-                if self.notifier:
-                    self.notifier.notify(
-                        'task_failed',
-                        f'{task.task_id[:8]} {task.model} 失败，正在重试',
-                    )
             else:
                 task.finish('failed', str(e))
                 with self._lock:
@@ -512,13 +554,10 @@ class TaskQueue:
                 if self.clients:
                     self.clients.record_task_result(task.client_id, 'failed', task.completed_at - task.started_at)
                     self.clients.mark_status(task.client_id, 'online')
-                self.log.info(f"任务进入死信: {task.task_id[:8]}")
+                self._log_task('info', 'task_dead_letter', task)
                 self._emit('dead', task)
                 if self.notifier:
-                    self.notifier.notify(
-                        'task_failed',
-                        f'{task.task_id[:8]} {task.model} 失败，已进入死信队列',
-                    )
+                    self.notifier.notify_client_task(task, 'failed')
         finally:
             self._prune_records()
             with self._lock:

@@ -24,7 +24,7 @@ from admin.logger import LOG_DIR
 from admin.reports import generate_report
 from admin.websocket import ConnectionManager, check_ws_origin, push_loop, STARTED_AT
 from common.app_context import asset_version, service_info as host_service_info
-from common.config import public_settings, reset_settings, VERSION
+from common.config import public_settings, reset_settings, reset_settings_section, VERSION
 from common.security import (SessionStore, authenticate_request, authenticate_websocket,
                              RequestBodyLimitMiddleware, set_session_cookie,
                              valid_host_and_origin)
@@ -35,17 +35,40 @@ _LOG_FILENAME_RE = re.compile(
     r'\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_\d+(?:_\d+)?\.log)$')
 
 
+def _install_connection_reset_filter(loop):
+    """忽略 Windows 回收已被客户端重置的连接时产生的底层噪声。"""
+    previous_handler = loop.get_exception_handler()
+
+    def exception_handler(current_loop, context):
+        error = context.get('exception')
+        error_numbers = (getattr(error, 'winerror', None), getattr(error, 'errno', None))
+        if isinstance(error, ConnectionResetError) and 10054 in error_numbers:
+            return
+        if previous_handler:
+            previous_handler(current_loop, context)
+        else:
+            current_loop.default_exception_handler(context)
+
+    loop.set_exception_handler(exception_handler)
+    return previous_handler
+
+
 @asynccontextmanager
 async def lifespan(_app):
     """启动任务调度与监控（幂等，主服务共用同一单例）+ 推送循环；停止时关闭 WS 连接"""
     ctx = _app.state.ctx
+    loop = asyncio.get_running_loop()
+    previous_handler = _install_connection_reset_filter(loop)
     ctx['task_queue'].start()
     ctx['monitor'].start()
     manager = _app.state.manager
     task = asyncio.create_task(push_loop(manager, ctx))
-    yield
-    task.cancel()
-    await manager.close_all()
+    try:
+        yield
+    finally:
+        task.cancel()
+        await manager.close_all()
+        loop.set_exception_handler(previous_handler)
 
 
 class AdminApp:
@@ -68,7 +91,7 @@ class AdminApp:
 
     def _mount_static(self):
         self.app.mount('/admin/static', StaticFiles(directory=os.path.join(base_path, 'static')), name='admin-static')
-        # 共享静态资源：直接挂载主服务目录（i18n.js、style.css、plotly、字体只打一份）
+        # 共享静态资源：直接挂载主服务目录（shared 基础层、字体、Plotly 只打一份）
         web_static = os.path.join(os.path.dirname(base_path), 'web', 'static')
         self.app.mount('/static', StaticFiles(directory=web_static), name='shared-static')
         self.templates = Jinja2Templates(directory=os.path.join(base_path, 'templates'))
@@ -128,17 +151,28 @@ class AdminApp:
             return RedirectResponse('/admin/')
 
         @app.get('/admin/')
+        @app.get('/admin/monitor')
+        @app.get('/admin/monitor/cpu')
+        @app.get('/admin/monitor/memory')
+        @app.get('/admin/monitor/gpu')
+        @app.get('/admin/monitor/disk')
+        @app.get('/admin/monitor/network')
+        @app.get('/admin/monitor/service')
+        @app.get('/admin/monitor/full')
+        @app.get('/admin/monitor/compact')
+        @app.get('/admin/tasks')
+        @app.get('/admin/clients')
+        @app.get('/admin/access')
+        @app.get('/admin/notify')
+        @app.get('/admin/pushplus')
+        @app.get('/admin/logs')
+        @app.get('/admin/settings')
         async def admin_page(request: Request):
             settings = ctx['settings']
             # 与主界面共用同一份服务信息（软件运行主机的信息，见 app_context.service_info）
             service_info = host_service_info()
 
-            asset_ver = asset_version(
-                os.path.join(base_path, 'static', 'js', 'admin.js'),
-                os.path.join(base_path, 'static', 'css', 'admin.css'),
-                os.path.join(os.path.dirname(base_path), 'web', 'static', 'js', 'i18n.js'),
-                os.path.join(os.path.dirname(base_path), 'web', 'static', 'css', 'style.css'),
-            )
+            asset_ver = asset_version()
 
             response = self.templates.TemplateResponse(request=request, name='admin.html', context={
                 'init_config': {
@@ -146,6 +180,8 @@ class AdminApp:
                     'asset_ver': asset_ver,
                     'port': int(settings.get('port', 5000)),
                     'admin_port': int(settings.get('admin_port', 5001)),
+                    'monitor_default_view': settings.get('monitor_default_view', 'full'),
+                    'lan_ip': ctx.get('lan_ip', ''),
                     'log_dir': str(LOG_DIR),
                     'service_info': service_info,
                 },
@@ -170,7 +206,9 @@ class AdminApp:
             await self.manager.connect(ws)
             try:
                 while True:
-                    await ws.receive_text()  # 保活；客户端无需发送业务消息
+                    message = await ws.receive_json()
+                    if isinstance(message, dict) and message.get('type') == 'language':
+                        ctx['log'].set_language(message.get('lang'))
             except WebSocketDisconnect:
                 pass
             except Exception:
@@ -183,7 +221,7 @@ class AdminApp:
         @app.get('/admin/api/metrics')
         async def metrics():
             return ok({
-                'started_at': STARTED_AT,
+                'started_at': ctx.get('started_at') or STARTED_AT,
                 'current': ctx['monitor'].get_metrics(),
                 'history': ctx['monitor'].get_history(),
                 'peaks': ctx['monitor'].get_peaks(),
@@ -206,7 +244,8 @@ class AdminApp:
             if not ctx['clients'].get(client_id):
                 return fail('客户端不存在', 404)
             _pause_client(client_id)
-            ctx['log'].audit(f'暂停客户端 {client_id[:8]}')
+            client = ctx['clients'].get(client_id)
+            ctx['log'].audit_event('client_pause', client_id=client_id, client_name=client.client_name if client else None)
             return ok()
 
         @app.post('/admin/api/client/{client_id}/resume')
@@ -214,7 +253,8 @@ class AdminApp:
             if not ctx['clients'].get(client_id):
                 return fail('客户端不存在', 404)
             ctx['clients'].mark_status(client_id, 'online', force=True)
-            ctx['log'].audit(f'恢复客户端 {client_id[:8]}')
+            client = ctx['clients'].get(client_id)
+            ctx['log'].audit_event('client_resume', client_id=client_id, client_name=client.client_name if client else None)
             return ok()
 
         @app.post('/admin/api/client/{client_id}/kick')
@@ -226,24 +266,41 @@ class AdminApp:
             ctx['client_cache'].remove_client(client_id)
             ctx['access'].add_blacklist(ip=client.ip, client_id=client_id)
             ctx['clients'].mark_status(client_id, 'offline')
-            ctx['log'].audit(f'踢出客户端 {client_id[:8]}（IP {client.ip} 已同时封禁）')
+            ctx['log'].audit_event(
+                'client_kick',
+                client_id=client_id,
+                client_name=client.client_name,
+                detail={'ip': client.ip, 'blocked': True},
+            )
             ctx['notifier'].notify('client_kicked', f'{client.client_name or client_id[:8]} ({client.ip})')
             return ok()
 
         @app.post('/admin/api/client/{client_id}/clear-cache')
         async def clear_client_cache(client_id: str):
             removed = ctx['client_cache'].remove_client(client_id)
-            ctx['log'].audit(f'清理客户端缓存 {client_id[:8]}')
+            client = ctx['clients'].get(client_id)
+            ctx['log'].audit_event(
+                'client_cache_clear',
+                client_id=client_id,
+                client_name=client.client_name if client else None,
+                detail={'result': 'cleared' if removed else 'empty'},
+            )
             return ok({'removed': removed})
 
         @app.post('/admin/api/client/{client_id}/delete')
         async def delete_client(client_id: str):
             if not ctx['clients'].get(client_id):
                 return fail('客户端不存在', 404)
+            client = ctx['clients'].get(client_id)
             ctx['task_queue'].cancel_client_tasks(client_id, by='admin')
             closed = ctx['presence_sockets'].close_all(client_id)
             ctx['clients'].delete(client_id)
-            ctx['log'].audit(f'删除客户端记录 {client_id[:12]}（已断开 {closed} 个页面连接并取消其任务）')
+            ctx['log'].audit_event(
+                'client_record_delete',
+                client_id=client_id,
+                client_name=client.client_name,
+                detail={'closed': closed},
+            )
             return ok()
 
         @app.post('/admin/api/client/{client_id}/remark')
@@ -251,25 +308,26 @@ class AdminApp:
             data = await request.json()
             if not ctx['clients'].set_remark(client_id, remark=data.get('remark'), tags=data.get('tags')):
                 return fail('客户端不存在', 404)
-            ctx['log'].audit(f'更新客户端备注 {client_id[:8]}')
+            client = ctx['clients'].get(client_id)
+            ctx['log'].audit_event('client_remark_update', client_id=client_id, client_name=client.client_name if client else None)
             return ok()
 
         @app.post('/admin/api/clear-all-cache')
         async def clear_all_cache():
             ctx['client_cache'].clear()
-            ctx['log'].audit('清空所有客户端缓存')
+            ctx['log'].audit_event('all_client_cache_clear', target='全部客户端')
             return ok()
 
         @app.post('/admin/api/stats/clear')
         async def clear_stats():
             ctx['clients'].clear_all_stats()
-            ctx['log'].audit('清除全部客户端统计')
+            ctx['log'].audit_event('all_client_stats_clear', target='全部客户端')
             return ok()
 
         @app.post('/admin/api/counters/reset')
         async def reset_counters():
             ctx['clients'].reset_counters()
-            ctx['log'].audit('重置全部客户端累计计数')
+            ctx['log'].audit_event('all_client_counter_reset', target='全部客户端')
             return ok()
 
         # ---------- 任务队列 ----------
@@ -280,7 +338,7 @@ class AdminApp:
             return ok({
                 'running': q.list_running(),
                 'waiting': q.list_waiting(),
-                'history': q.list_history()[-100:],
+                'history': q.list_history()[-50:],
                 'counts': q.counts(),
             })
 
@@ -302,33 +360,54 @@ class AdminApp:
                 return fail('任务不存在', 404)
             task_queue = ctx['task_queue']
             okr, why = task_queue.cancel(task_id, by='admin')
-            ctx['log'].audit(f'取消任务 {task_id[:8]} ({why})')
+            ctx['log'].audit_event(
+                'task_cancel_action',
+                client_id=queue_task.client_id,
+                client_name=(ctx['clients'].get(queue_task.client_id).client_name
+                             if ctx['clients'].get(queue_task.client_id) else None),
+                task_id=task_id,
+                detail={'result': why},
+            )
             return ok({'state': why}) if okr else fail(f'无法取消（{why}）')
 
         @app.post('/admin/api/task/{task_id}/retry')
         async def admin_retry_task(task_id: str):
+            queue_task = ctx['task_queue'].get_task(task_id)
             if not ctx['task_queue'].retry(task_id):
                 return fail('仅失败（死信）任务可重试')
-            ctx['log'].audit(f'重试死信任务 {task_id[:8]}')
+            client = ctx['clients'].get(queue_task.client_id) if queue_task else None
+            ctx['log'].audit_event(
+                'dead_task_retry',
+                client_id=queue_task.client_id if queue_task else None,
+                client_name=client.client_name if client else None,
+                task_id=task_id,
+            )
             return ok()
 
         @app.delete('/admin/api/task/{task_id}')
         async def admin_delete_task(task_id: str):
+            queue_task = ctx['task_queue'].get_task(task_id)
             if not ctx['task_queue'].remove_dead(task_id):
                 return fail('任务不存在或不在死信队列', 404)
-            ctx['log'].audit(f'删除死信任务 {task_id[:8]}')
+            client = ctx['clients'].get(queue_task.client_id) if queue_task else None
+            ctx['log'].audit_event(
+                'dead_task_delete',
+                client_id=queue_task.client_id if queue_task else None,
+                client_name=client.client_name if client else None,
+                task_id=task_id,
+            )
             return ok()
 
         @app.post('/admin/api/tasks/cancel-all')
         async def cancel_all_tasks():
             ctx['task_queue'].cancel_all(by='admin')
-            ctx['log'].audit('中断所有任务')
+            ctx['log'].audit_event('all_tasks_interrupt', target='任务队列')
             return ok()
 
         @app.post('/admin/api/tasks/clear-queue')
         async def clear_queue():
             n = ctx['task_queue'].clear_queue()
-            ctx['log'].audit(f'清空等待队列（{n} 个）')
+            ctx['log'].audit_event('queue_clear', target='任务队列', detail={'count': n})
             return ok({'cleared': n})
 
         # ---------- 访问控制 ----------
@@ -355,7 +434,11 @@ class AdminApp:
                     return fail('名单类型无效')
             except ValueError as e:
                 return fail(f'IP 格式无效: {e}')
-            ctx['log'].audit(f'访问控制: {target} {action} {kind} {entry}')
+            ctx['log'].audit_event(
+                'access_control_update',
+                target=target,
+                detail={'action': action, 'kind': kind, 'value': entry},
+            )
             return ok({'lists': ctx['access'].get_lists()})
 
         @app.get('/admin/api/access-events')
@@ -383,14 +466,35 @@ class AdminApp:
                 return fail(str(e))
             media = {'csv': 'text/csv', 'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                      'json': 'application/json'}[format]
-            ctx['log'].audit(f'导出报表 {filename}')
+            ctx['log'].audit_event(
+                'report_export',
+                target=filename,
+                detail={'type': type, 'format': format},
+            )
             return Response(blob, media_type=media, headers={
                 'Content-Disposition': f'attachment; filename="{filename}"'})
 
         # ---------- 日志 ----------
 
         @app.get('/admin/api/logs')
-        async def logs(since: int = 0):
+        async def logs(since: int = 0, filename: str = ''):
+            if filename:
+                if not _LOG_FILENAME_RE.fullmatch(filename) or Path(filename).name != filename:
+                    return fail('日志文件名无效')
+                path = LOG_DIR / filename
+                if not path.is_file():
+                    return fail('日志文件不存在', 404)
+                try:
+                    lines = path.read_text(encoding='utf-8').splitlines()
+                except (OSError, UnicodeError):
+                    return fail('读取日志文件失败', 500)
+                return ok({
+                    'entries': [
+                        {'seq': index, 'message': line, 'client_id': '', 'task_id': '', 'action': ''}
+                        for index, line in enumerate(lines, start=1)
+                    ],
+                    'file': str(path),
+                })
             log = ctx['log']
             return ok({'entries': log.replay(since_seq=since), 'file': log.current_file()})
 
@@ -453,21 +557,36 @@ class AdminApp:
             except (ValueError, TypeError) as e:
                 return fail(str(e))
             ctx['reload_runtime_settings']()
-            ctx['log'].audit('修改系统设置')
+            ctx['log'].audit_event('settings_update', target='系统设置')
             return ok({'settings': public_settings(ctx['settings']), 'restart_required': True})
 
         @app.post('/admin/api/settings/reset')
         async def settings_reset():
             reset_settings()
             ctx['reload_runtime_settings']()
-            ctx['log'].audit('恢复默认设置')
+            ctx['log'].audit_event('settings_reset', target='系统设置')
             return ok({'settings': public_settings(ctx['settings']), 'restart_required': True})
+
+        @app.post('/admin/api/settings/reset-section')
+        async def settings_reset_section_api(request: Request):
+            try:
+                data = await request.json()
+                section = data.get('section') if isinstance(data, dict) else None
+                reset_settings_section(section)
+            except (ValueError, TypeError) as e:
+                return fail(str(e))
+            ctx['reload_runtime_settings']()
+            ctx['log'].audit_event('settings_reset', target=f'系统设置-{section}')
+            return ok({
+                'settings': public_settings(ctx['settings']),
+                'restart_required': section == 'startup',
+            })
 
         # ---------- 服务控制 ----------
 
         @app.post('/admin/api/shutdown')
         async def shutdown():
-            ctx['log'].audit('请求停止所有服务')
+            ctx['log'].audit_event('service_shutdown_request', target='服务系统')
             self.shutdown_event.set()
             return ok()
 

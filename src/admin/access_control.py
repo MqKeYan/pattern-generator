@@ -19,13 +19,12 @@ CONFIG_DIR = SOFTWARE_ROOT / 'config'
 
 # 主服务默认允许的私有网段
 _ALLOWED_NETWORKS = [
-    ipaddress.ip_network('127.0.0.0/8'),
     ipaddress.ip_network('10.0.0.0/8'),
     ipaddress.ip_network('172.16.0.0/12'),
     ipaddress.ip_network('192.168.0.0/16'),
 ]
 
-_DENIED_BUFFER_SIZE = 500
+_DENIED_BUFFER_SIZE = 50
 _RATE_KEY_LIMIT = 4096
 
 
@@ -106,21 +105,21 @@ class AccessControl:
             atomic_write_json(path, getattr(self, attr))
         except OSError as e:
             if self.log:
-                self.log.error(f'名单写入失败 {path.name}: {e}')
+                self.log.error_event('access_list_write_failed', detail={'file': path.name, 'error': e})
 
     # ---------- 判定 ----------
 
     def is_allowed(self, ip, client_id):
         """判定是否允许访问，返回 (是否允许, 原因)"""
         with self._lock:
+            if _matches_ip(self._blacklist['ips'], ip):
+                return False, 'blacklist_ip'
+            if client_id and client_id in self._blacklist['client_ids']:
+                return False, 'blacklist_client'
             if client_id and client_id in self._whitelist['client_ids']:
                 return True, 'whitelist'
             if _matches_ip(self._whitelist['ips'], ip):
                 return True, 'whitelist'
-            if client_id and client_id in self._blacklist['client_ids']:
-                return False, 'blacklist_client'
-            if _matches_ip(self._blacklist['ips'], ip):
-                return False, 'blacklist_ip'
         if not _is_private_ip(ip):
             return False, 'non_private_ip'
         return True, 'ok'

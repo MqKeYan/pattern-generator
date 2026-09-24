@@ -1,0 +1,37 @@
+        <!-- ===== 左侧边栏 ===== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1 class="app-title">后台管理系统</h1>
+                <button class="mobile-sidebar-toggle" type="button" data-mobile-sidebar-toggle aria-controls="sidebar" aria-expanded="false">导航与状态</button>
+                <div class="client-card">
+                    <div class="status-grid" id="service-info"></div>
+                </div>
+            </div>
+
+            <div class="sidebar-scroll">
+                <!-- 全局状态卡片 -->
+                <section class="panel-card">
+                    <h3 class="card-title">全局状态</h3>
+                    <div class="status-grid">
+                        <span class="status-k">运行时长</span><span class="status-v" id="stat-uptime">-</span>
+                        <span class="status-k">主服务端口</span><span class="status-v" id="stat-port">-</span>
+                        <span class="status-k">后台端口</span><span class="status-v" id="stat-admin-port">-</span>
+                        <span class="status-k">在线客户端</span><span class="status-v" id="stat-online">-</span>
+                        <span class="status-k">运行中任务</span><span class="status-v" id="stat-running">-</span>
+                        <span class="status-k">等待任务</span><span class="status-v" id="stat-waiting">-</span>
+                    </div>
+                    <div class="ws-state" id="ws-state">连接中...</div>
+                </section>
+
+                <nav class="admin-nav" aria-label="后台功能导航">
+                    <button class="admin-nav-btn active" data-impact="low" data-tab="tab-overview"><span>概览</span></button>
+                    <button class="admin-nav-btn" data-impact="low" data-tab="tab-monitor"><span>实时监控</span></button>
+                    <button class="admin-nav-btn" data-impact="low" data-tab="tab-tasks"><span>任务队列</span></button>
+                    <button class="admin-nav-btn" data-impact="low" data-tab="tab-clients"><span>客户端管理</span></button>
+                    <button class="admin-nav-btn" data-impact="low" data-tab="tab-logs"><span>日志</span></button>
+                    <button class="admin-nav-btn" data-impact="low" data-tab="tab-notify"><span>告警通知</span></button>
+                    <button class="admin-nav-btn" data-impact="low" data-tab="tab-access"><span>访问控制</span></button>
+                    <button class="admin-nav-btn" data-impact="low" data-tab="tab-settings"><span>系统设置</span></button>
+                </nav>
+            </div>
+        </aside>

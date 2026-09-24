@@ -2,6 +2,7 @@
 
 import hashlib
 import hmac
+import ipaddress
 import os
 import secrets
 import threading
@@ -14,6 +15,8 @@ from fastapi.responses import JSONResponse
 
 SESSION_TTL_SECONDS = 24 * 60 * 60
 SESSION_LIMIT = 4096
+_LAN_NETWORKS = tuple(ipaddress.ip_network(network) for network in (
+    '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
 
 
 class RequestBodyTooLarge(Exception):
@@ -144,13 +147,32 @@ def authenticate_websocket(ws, sessions, client_id='', cookie_base='pattern_sess
 
 
 def trusted_hosts(settings, port):
-    """返回带端口的可信 Host 集合；局域网地址必须显式配置。"""
-    hosts = {f'127.0.0.1:{port}', f'localhost:{port}'}
+    """返回带端口的可信局域网 Host 集合，拒绝回环和非局域网地址。"""
+    hosts = set()
     for item in settings.get('allowed_hosts', []):
         value = str(item).strip().lower()
         if not value:
             continue
-        hosts.add(value if ':' in value else f'{value}:{port}')
+        host = value
+        configured_port = None
+        if value.startswith('[') and ']' in value:
+            host, _, suffix = value[1:].partition(']')
+            if suffix.startswith(':') and suffix[1:].isdigit():
+                configured_port = int(suffix[1:])
+        elif value.count(':') == 1 and value.rsplit(':', 1)[1].isdigit():
+            host, port_text = value.rsplit(':', 1)
+            configured_port = int(port_text)
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError:
+            continue
+        if address.version != 4 or not any(address in network for network in _LAN_NETWORKS) or \
+                address.is_loopback or \
+                address.is_link_local or address.is_unspecified:
+            continue
+        if configured_port is not None and configured_port != port:
+            continue
+        hosts.add(f'{host}:{port}')
     return hosts
 
 

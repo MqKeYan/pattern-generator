@@ -1,0 +1,21 @@
+
+            <!-- 2. 实时监控 -->
+            <div class="tab-panel" id="tab-monitor">
+                <nav class="tab-nav monitor-category-nav" aria-label="实时监控分类">
+                    <button class="tab-btn monitor-category-btn active" data-impact="low" data-monitor-category="overview">总览</button>
+                    <button class="tab-btn monitor-category-btn" data-impact="low" data-monitor-category="cpu">CPU</button>
+                    <button class="tab-btn monitor-category-btn" data-impact="low" data-monitor-category="memory">内存</button>
+                    <button class="tab-btn monitor-category-btn" data-impact="low" data-monitor-category="gpu">GPU</button>
+                    <button class="tab-btn monitor-category-btn" data-impact="low" data-monitor-category="disk">磁盘</button>
+                    <button class="tab-btn monitor-category-btn" data-impact="low" data-monitor-category="network">网络</button>
+                    <button class="tab-btn monitor-category-btn" data-impact="low" data-monitor-category="service">服务</button>
+                    <button class="monitor-view-switch" id="monitor-view-toggle" type="button" role="switch" aria-checked="false" aria-label="切换监控视图" data-impact="low">
+                        <span class="monitor-view-switch-track" aria-hidden="true"><span class="monitor-view-switch-thumb"></span></span>
+                        <span class="monitor-view-switch-label" id="monitor-view-toggle-label">完整视图</span>
+                    </button>
+                </nav>
+                <div class="monitor-category-content">
+                    <div class="monitor-grid" id="monitor-grid"></div>
+                    <div class="cpu-package-sections" id="cpu-package-sections" hidden></div>
+                </div>
+            </div>

@@ -20,7 +20,7 @@ mimetypes.add_type('font/otf', '.otf')
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 import torch
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -31,8 +31,10 @@ else:
     base_path = os.path.dirname(__file__)
 
 from common.app_context import (access, clients, client_cache, init_config, log,
-                                monitor, presence_sockets, settings, task_queue)
+                                monitor, presence_sockets, release_runtime_memory, settings, task_queue)
 from admin.tasks import QueueLimitError
+from admin.logger import task_mode_label
+from common.notification_channels import sanitize_channel_targets, sanitize_pushplus_targets, send_channel_notifications
 from common.security import (SessionStore, authenticate_request, authenticate_websocket,
                              RequestBodyLimitMiddleware, set_session_cookie, trusted_hosts,
                              valid_host_and_origin)
@@ -52,6 +54,17 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
 app.add_middleware(RequestBodyLimitMiddleware, settings=settings)
 app.mount('/static', StaticFiles(directory=os.path.join(base_path, 'static')), name='static')
 templates = Jinja2Templates(directory=os.path.join(base_path, 'templates'))
+
+
+def _release_delivered_task_memory(client_id='', task_id=''):
+    """响应发送后回收结果对象，避免影响当前任务结果的序列化。"""
+    summary = release_runtime_memory()
+    log.info_event(
+        'task_memory_release',
+        client_id=client_id,
+        task_id=task_id,
+        detail={'gc': summary['gc_collected'], 'cuda': 'reclaimed' if summary['cuda_cache_released'] else 'unused'},
+    )
 
 from core.config import MODEL_CONFIGS, MODEL_INIT_RANGES, GRID_SIZE  # noqa: E402
 
@@ -144,6 +157,34 @@ def _language_code(value):
     return value
 
 
+_CLIENT_TASK_NOTIFICATION_EVENTS = {'completed', 'failed', 'cancelled', 'timeout'}
+
+
+def _client_task_notifications(data):
+    """校验客户端私有通知配置，仅随当前提交任务短暂进入服务端。"""
+    raw = data.get('client_notifications') or {}
+    if not isinstance(raw, dict):
+        raise ValueError('client_notifications 必须是对象')
+    targets = raw.get('pushplus_targets')
+    events = raw.get('events', [])
+    channel_targets = raw.get('channel_targets')
+    if channel_targets is None:
+        channel_targets = raw.get('channels') or {}
+    if targets is not None and not isinstance(targets, list):
+        raise ValueError('PushPlus 目标格式无效')
+    if not isinstance(events, list) or any(event not in _CLIENT_TASK_NOTIFICATION_EVENTS for event in events):
+        raise ValueError('客户端通知事件格式无效')
+    if not isinstance(channel_targets, dict):
+        raise ValueError('客户端通知渠道格式无效')
+    return {
+        'pushplus_targets': sanitize_pushplus_targets(targets) if targets is not None else [],
+        'events': list(dict.fromkeys(events)),
+        'channel_targets': sanitize_channel_targets(channel_targets),
+        'lang': _language_code(raw.get('lang', data.get('lang', 'zh-CN'))),
+        'client_name': _client_name({'client_name': raw.get('client_name', data.get('client_name', ''))}),
+    }
+
+
 def _authenticate(request, client_id=''):
     return authenticate_request(request, sessions, client_id)
 
@@ -174,6 +215,11 @@ def _register_client(data, ip):
 
 
 @app.get('/')
+@app.get('/2d')
+@app.get('/3d')
+@app.get('/animation')
+@app.get('/settings')
+@app.get('/pushplus')
 async def index(request: Request):
     """主页面，同时签发 HttpOnly 浏览器会话。"""
     response = templates.TemplateResponse(
@@ -205,14 +251,17 @@ async def presence(ws: WebSocket):
 
     client_id = None
     session_id = None
+    presence_registered = False
     try:
         data = await asyncio.wait_for(ws.receive_json(), timeout=10)
         try:
             client_id = _client_id(data)
             client_name = _client_name(data)
+            client_lang = _language_code(data.get('lang', 'zh-CN'))
         except (TypeError, ValueError):
             await ws.close(code=4000)
             return
+        log.set_language(client_lang)
         session_id = str(data.get('client_session_id', '') or '') or None
         if not client_id or not session_id:
             await ws.close(code=4000)
@@ -241,11 +290,17 @@ async def presence(ws: WebSocket):
                 int(settings.get('max_presence_sockets_per_client', 4))):
             await ws.close(code=4004)
             return
+        presence_registered = True
         presence_sockets.release_reservation()
         reserved = False
 
         while True:
-            await ws.receive()
+            message = await ws.receive_json()
+            if isinstance(message, dict) and message.get('type') == 'language':
+                try:
+                    log.set_language(_language_code(message.get('lang', 'zh-CN')))
+                except (TypeError, ValueError):
+                    continue
     except (WebSocketDisconnect, asyncio.TimeoutError):
         pass
     except Exception:
@@ -254,8 +309,10 @@ async def presence(ws: WebSocket):
         if reserved:
             presence_sockets.release_reservation()
         if client_id and session_id:
-            clients.disconnect(client_id, session_id)
-            presence_sockets.unregister(client_id, session_id)
+            # 仅当当前连接仍占有该会话键时才注销，避免刷新后的旧连接误清理新连接。
+            unregister_result = presence_sockets.unregister(client_id, session_id, ws)
+            if unregister_result != 'replaced' or not presence_registered:
+                clients.disconnect(client_id, session_id)
 
 
 @app.post('/api/simulate')
@@ -303,6 +360,8 @@ async def run_simulation(request: Request):
             _finite_float(data.get('y_min', MODEL_INIT_RANGES[model_name]['y_range'][0]), 'y_min'),
             _finite_float(data.get('y_max', MODEL_INIT_RANGES[model_name]['y_range'][1]), 'y_max'))
         lang = _language_code(data.get('lang', 'zh-CN'))
+        client_notifications = _client_task_notifications(data)
+        log.set_language(lang)
     except (TypeError, ValueError):
         return _error('参数格式无效')
 
@@ -343,13 +402,19 @@ async def run_simulation(request: Request):
     payload = {
         'type': 'simulate', 'model': model_name, 'params': params,
         'iterations': iterations, 'init_x_range': init_x_range, 'init_y_range': init_y_range,
-        'track_points': track_points, 'lang': lang,
+        'track_points': track_points, 'lang': lang, 'client_notifications': client_notifications,
     }
     try:
         task = task_queue.submit(payload, client_id, owner=auth.subject)
     except QueueLimitError as e:
         return _error(str(e), 429)
-    log.info(f"→ 模拟任务提交：{model_name}，迭代{iterations}次（队列位置 {task_queue.queue_position(task.task_id)}）")
+    log.info_event(
+        'task_submit', model_name, task_mode_label(task.type),
+        client_id=client_id,
+        client_name=client.client_name,
+        task_id=task.task_id,
+        detail={'iterations': iterations, 'queue': task_queue.queue_position(task.task_id)},
+    )
     return {
         'task_id': task.task_id, 'status': task.status,
         'queue_position': task_queue.queue_position(task.task_id),
@@ -403,6 +468,8 @@ async def run_animation(request: Request):
             _finite_float(data.get('y_min', MODEL_INIT_RANGES[model_name]['y_range'][0]), 'y_min'),
             _finite_float(data.get('y_max', MODEL_INIT_RANGES[model_name]['y_range'][1]), 'y_max'))
         lang = _language_code(data.get('lang', 'zh-CN'))
+        client_notifications = _client_task_notifications(data)
+        log.set_language(lang)
     except (TypeError, ValueError):
         return _error('参数格式无效')
 
@@ -431,13 +498,19 @@ async def run_animation(request: Request):
         'type': 'animate', 'model': model_name, 'params': params,
         'frames': frames, 'start_frame': start_frame,
         'init_x_range': init_x_range, 'init_y_range': init_y_range,
-        'lang': lang,
+        'lang': lang, 'client_notifications': client_notifications,
     }
     try:
         task = task_queue.submit(payload, client_id, owner=auth.subject)
     except QueueLimitError as e:
         return _error(str(e), 429)
-    log.info(f"→ 动画任务提交：{model_name}，{frames}帧（队列位置 {task_queue.queue_position(task.task_id)}）")
+    log.info_event(
+        'task_submit', model_name, task_mode_label(task.type),
+        client_id=client_id,
+        client_name=client.client_name,
+        task_id=task.task_id,
+        detail={'frames': frames, 'queue': task_queue.queue_position(task.task_id)},
+    )
     return {
         'task_id': task.task_id, 'status': task.status,
         'queue_position': task_queue.queue_position(task.task_id),
@@ -445,8 +518,35 @@ async def run_animation(request: Request):
     }
 
 
+@app.post('/api/client-notifications/test')
+async def test_client_notifications(request: Request):
+    """测试主界面当前客户端配置的新增通知渠道。"""
+    try:
+        data = await request.json()
+    except Exception:
+        return _error('请求体必须是 JSON')
+    if not isinstance(data, dict):
+        return _error('请求体必须是 JSON 对象')
+    try:
+        client_id = _client_id(data)
+        settings = _client_task_notifications(data)
+    except (TypeError, ValueError) as e:
+        return _error(str(e))
+    if _authenticate(request, client_id) is None:
+        return _error('缺少有效会话或访问密钥', 401)
+    send_channel_notifications(
+        settings['channel_targets'],
+        '客户端任务通知测试',
+        '本客户端新增通知渠道已启用。',
+        logger=log,
+        client_id=client_id,
+        client_name=settings['client_name'],
+    )
+    return {'success': True}
+
+
 @app.get('/api/task/{task_id}')
-async def task_status(task_id: str, request: Request):
+async def task_status(task_id: str, request: Request, background_tasks: BackgroundTasks):
     """查询任务状态、进度与结果；结果首次取走即交付"""
     snapshot = task_queue.get(task_id)
     if snapshot is None:
@@ -457,28 +557,41 @@ async def task_status(task_id: str, request: Request):
 
     if snapshot['status'] == 'completed' and not snapshot['delivered']:
         result = task_queue.get(task_id, include_result=True).get('result')
+        if result is None:
+            result = client_cache.get_task(snapshot['client_id'], task_id)
         if result is not None:
-            # 结果同时写入客户端缓存（供刷新恢复），随后释放任务结果内存
-            client_id = snapshot['client_id']
-            if client_id:
-                if snapshot['type'] == 'simulate':
-                    client_cache.put(client_id, task_id, 'simulation', {
-                        'type': 'simulation',
-                        'viz_2d': result.get('viz_2d'),
-                        'viz_3d': result.get('viz_3d'),
-                        'model': result.get('model'),
-                        'iterations': result.get('iterations'),
-                    })
-                else:
-                    client_cache.put(client_id, task_id, 'animation', {
-                        'type': 'animation',
-                        'animation': result.get('animation'),
-                        'model': result.get('model'),
-                    })
+            # 结果已在任务完成时转存磁盘，首次交付后仅清理任务引用。
             task_queue.mark_delivered(task_id)
             snapshot['result'] = result
+            background_tasks.add_task(
+                _release_delivered_task_memory,
+                snapshot['client_id'],
+                task_id,
+            )
     snapshot['queue_position'] = task_queue.queue_position(task_id)
     return snapshot
+
+
+@app.get('/api/client-task-logs')
+async def client_task_logs(request: Request, client_id: str = ''):
+    """仅返回当前已认证客户端自身任务的内存日志。"""
+    try:
+        normalized_client_id = _client_id({'client_id': client_id})
+    except ValueError as exc:
+        return _error(str(exc))
+    if _authenticate(request, normalized_client_id) is None:
+        return _error('缺少有效会话或访问密钥', 401)
+    entries = [
+        {
+            'seq': entry['seq'],
+            'message': entry['message'],
+            'task_id': entry.get('task_id', ''),
+            'action': entry.get('action', ''),
+        }
+        for entry in log.replay()
+        if entry.get('client_id') == normalized_client_id and entry.get('task_id')
+    ]
+    return {'entries': entries[-200:]}
 
 
 @app.post('/api/task/{task_id}/cancel')
@@ -519,6 +632,7 @@ async def cleanup(request: Request):
         return _error(str(e))
     if _authenticate(request, client_id) is None:
         return _error('缺少有效会话或访问密钥', 401)
+    client = clients.get(client_id) if client_id else None
     if client_id:
         client_cache.remove_client(client_id)
     success = True
@@ -530,7 +644,12 @@ async def cleanup(request: Request):
             torch.cuda.ipc_collect()
     except Exception:
         success = False
-    log.info(f"→ 清理缓存：{'完成' if success else '失败'}（{client_id[:8] if client_id else '全局'}）")
+    log.info_event(
+        'cache_clear_complete' if success else 'cache_clear_failed',
+        client_id=client_id or None,
+        client_name=client.client_name if client else None,
+        target='全局缓存' if not client_id else None,
+    )
     return {'success': success, 'message': '缓存清理完成' if success else '缓存清理失败'}
 
 
@@ -550,6 +669,7 @@ async def restore(request: Request):
     include_animation = bool(data.get('include_animation', True))
     cached = client_cache.get(client_id, include_animation=include_animation)
     if cached is not None:
-        log.info(f"→ 恢复缓存：客户端 {client_id[:8]}")
+        client = clients.get(client_id)
+        log.info_event('cache_restore_complete', client_id=client_id, client_name=client.client_name if client else None)
         return {'success': True, 'cached': cached}
     return {'success': False, 'cached': None}

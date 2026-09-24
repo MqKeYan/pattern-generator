@@ -73,27 +73,16 @@ def show_port_status(port):
     return processes
 
 
-def _belongs_to_software(process):
-    """仅允许终止本软件实例，不误杀其他应用。"""
-    name = str(process.get('Name') or '').lower()
-    if getattr(sys, 'frozen', False):
-        return name == Path(sys.executable).name.lower()
-    if not (name.startswith('python') or name == 'py.exe'):
-        return False
-    return bool(re.search(r'(?:^|[\\/\s\"\'])run\.py(?:$|[\s\"\'])',
-                          str(process.get('CommandLine') or '').lower()))
-
-
 def kill_port_processes(processes, confirmed=False):
-    """用户明确确认后，仅清理属于本软件的端口占用进程。"""
+    """用户明确确认后，清理当前目标端口列出的占用进程。"""
     if not confirmed:
         print('  未获得明确确认，未清理任何进程')
         return False
     all_success = True
     for p in processes:
         pid = p.get('ProcessId')
-        if not pid or not _belongs_to_software(p):
-            print(f"  已跳过非本软件进程: PID {pid} ({p.get('Name')})")
+        if not pid:
+            print(f"  已跳过无效进程: PID {pid} ({p.get('Name')})")
             all_success = False
             continue
         result = subprocess.run(['taskkill', '/PID', str(pid), '/F'],
@@ -192,6 +181,72 @@ def remove_instance_lock():
         _LOCK_PATH.unlink(missing_ok=True)
     except OSError:
         pass
+
+
+def cleanup_same_software_instances(instances):
+    """清理实例检测明确识别出的本软件进程，并回收对应实例锁。"""
+    current_pid = os.getpid()
+    process_map = {}
+    instance_ports = set()
+    for instance in instances or []:
+        lock = instance.get('lock') or {}
+        for key in ('port', 'admin_port'):
+            port = lock.get(key)
+            if isinstance(port, int) and 1 <= port <= 65535:
+                instance_ports.add(port)
+        for process in instance.get('processes', []):
+            pid = process.get('ProcessId')
+            if isinstance(pid, int) and pid > 0 and pid != current_pid:
+                process_map[pid] = process
+
+    if not process_map:
+        print('  未找到可清理的本软件进程')
+        return False
+
+    # 只结束每个实例的顶层进程，由系统递归回收其子进程，避免重复结束子进程。
+    process_ids = set(process_map)
+    child_ids = {
+        process.get('ProcessId')
+        for process in process_map.values()
+        if process.get('ParentProcessId') in process_ids
+    }
+    root_ids = sorted(process_ids - child_ids)
+    success = True
+    for pid in root_ids:
+        result = subprocess.run(
+            ['taskkill', '/PID', str(pid), '/T', '/F'],
+            capture_output=True,
+            text=True,
+            encoding='gbk',
+            errors='ignore',
+        )
+        if result.returncode == 0:
+            print(f'  已清理本软件实例进程：PID {pid}')
+        else:
+            success = False
+            detail = result.stdout.strip() or result.stderr.strip() or '未知错误'
+            print(f'  清理本软件实例进程失败：PID {pid}，{detail}')
+
+    # 等待监听端口释放，避免清理完成后立即启动仍撞到旧实例端口。
+    for port in sorted(instance_ports):
+        deadline = time.monotonic() + 2
+        while get_port_pids(port) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        if get_port_pids(port):
+            success = False
+            print(f'  端口仍被占用，未能完全释放：{port}')
+        else:
+            print(f'  已释放实例端口：{port}')
+
+    # 仅在锁所属进程已经退出后删除锁，清理失败时保留锁供下次检测。
+    lock = read_instance_lock()
+    if lock and isinstance(lock.get('pid'), int) and lock['pid'] in process_ids:
+        if not _pid_alive(lock['pid']):
+            remove_instance_lock()
+        else:
+            success = False
+            print(f"  实例锁仍被占用：PID {lock['pid']}")
+    return success
 
 
 def _match_own_software(proc):

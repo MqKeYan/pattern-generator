@@ -1,0 +1,50 @@
+
+    <!-- 软件设置弹窗 -->
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-content" id="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" data-i18n="software_settings">软件设置</h3>
+            </div>
+            <div class="settings-item">
+                <label data-i18n="language">语言</label>
+                <div class="custom-select" id="language-select">
+                    <div class="custom-select-trigger">
+                        <span class="selected-text">简体中文</span>
+                    </div>
+                    <div class="custom-select-options">
+                        <div class="custom-select-option selected" data-value="zh-CN" data-i18n="language_zh_cn">简体中文</div>
+                        <div class="custom-select-option" data-value="zh-TW" data-i18n="language_zh_tw">繁体中文</div>
+                        <div class="custom-select-option" data-value="en" data-i18n="language_en">英文</div>
+                        <div class="custom-select-option" data-value="ja" data-i18n="language_ja">日语</div>
+                        <div class="custom-select-option" data-value="ko" data-i18n="language_ko">韩语</div>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-item">
+                <label data-i18n="client_name">客户端名称</label>
+                <input type="text" id="client-name-input" maxlength="40" class="num-input">
+            </div>
+            <section class="settings-item task-notification-settings" aria-labelledby="task-notification-title">
+                <h4 id="task-notification-title" class="settings-section-title" data-i18n="task_notification_title">本客户端任务通知</h4>
+                <label class="settings-checkbox"><input type="checkbox" id="tn-enabled"><span data-i18n="task_notification_enable">启用任务通知</span></label>
+                <div class="notify-option-grid task-notification-options">
+                    <label class="settings-checkbox"><input type="checkbox" id="tn-browser"><span data-i18n="task_notification_browser">Windows 系统通知</span></label>
+                    <label class="settings-checkbox"><input type="checkbox" id="tn-sound"><span data-i18n="task_notification_sound">提示音</span></label>
+                </div>
+                <div class="notify-option-grid task-notification-events">
+                    <label class="settings-checkbox"><input type="checkbox" id="tn-completed"><span data-i18n="task_notification_completed">任务完成</span></label>
+                    <label class="settings-checkbox"><input type="checkbox" id="tn-failed"><span data-i18n="task_notification_failed">任务失败</span></label>
+                    <label class="settings-checkbox"><input type="checkbox" id="tn-cancelled"><span data-i18n="task_notification_cancelled">任务取消</span></label>
+                    <label class="settings-checkbox"><input type="checkbox" id="tn-timeout"><span data-i18n="task_notification_timeout">任务超时</span></label>
+                </div>
+                <button class="btn btn-outline btn-info" id="manage-notification-channels" type="button" data-impact="low" data-i18n="task_notification_manage">管理第三方推送</button>
+            </section>
+            <div class="modal-actions">
+                <button class="btn btn-outline btn-danger" id="restore-default" data-impact="caution" data-i18n="restore_default">恢复默认</button>
+                <div class="modal-buttons">
+                    <button class="btn btn-outline btn-info" id="settings-cancel" data-impact="low" data-i18n="cancel">取消</button>
+                    <button class="btn btn-outline btn-success" id="settings-save" data-impact="normal" data-i18n="save">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>

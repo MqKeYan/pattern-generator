@@ -1,0 +1,211 @@
+/* 基础层：本地字体、主题变量、全局重置 */
+
+/* 本地字体声明 */
+/* === 本地字体：思源黑体可变字体（Noto Sans CJK VF） === */
+@font-face {
+    font-family: 'Noto Sans CJK SC';
+    src: url('/static/fonts/NotoSansCJK-VF.otf.ttc') format('truetype');
+    font-weight: 100 900;
+    font-display: block;
+}
+@font-face {
+    font-family: 'Noto Sans CJK TC';
+    src: url('/static/fonts/NotoSansCJK-VF.otf.ttc') format('truetype');
+    font-weight: 100 900;
+    font-display: block;
+}
+@font-face {
+    font-family: 'Noto Sans CJK HK';
+    src: url('/static/fonts/NotoSansCJK-VF.otf.ttc') format('truetype');
+    font-weight: 100 900;
+    font-display: block;
+}
+@font-face {
+    font-family: 'Noto Sans CJK JP';
+    src: url('/static/fonts/NotoSansCJK-VF.otf.ttc') format('truetype');
+    font-weight: 100 900;
+    font-display: block;
+}
+@font-face {
+    font-family: 'Noto Sans CJK KR';
+    src: url('/static/fonts/NotoSansCJK-VF.otf.ttc') format('truetype');
+    font-weight: 100 900;
+    font-display: block;
+}
+
+/* 主题变量与语言字体映射 */
+/* === CSS变量 === */
+:root {
+    --space-1: clamp(4px, 0.234vw, 6px);
+    --space-2: clamp(8px, 0.469vw, 12px);
+    --space-3: clamp(10px, 0.625vw, 16px);
+    --panel-padding: clamp(10px, 0.547vw, 14px);
+    --button-height: 37px;
+    /* 单行编辑控件统一采用基准桌面按钮高度。 */
+    --form-control-height: 37px;
+    --sidebar-width: 400px;
+    --plot-font-base: 14px;
+    --plot-font-title: 16px;
+    --plot-font-axis: 14px;
+    --plot-font-tick: 14px;
+    --plot-font-legend: 12px;
+    --plot-font-annotation: 12px;
+    --plot-font-tooltip: 14px;
+    --plot-font-monitor-title: 14px;
+    --plot-font-monitor-value: 12px;
+    --color-bg: #080d16;
+    --color-surface: rgba(16, 24, 38, 0.46);
+    --color-surface-2: rgba(25, 35, 53, 0.44);
+    --color-surface-3: rgba(38, 51, 75, 0.54);
+    --color-border: rgba(164, 190, 232, 0.2);
+    --color-border-hover: rgba(116, 170, 255, 0.42);
+    --color-text: #e0e4ec;
+    --color-text-secondary: #8895aa;
+    --color-text-muted: #5a6880;
+    --color-plot-text: #ffffff;
+    --color-plot-grid: rgba(255, 255, 255, 0.14);
+    --color-plot-axis: rgba(255, 255, 255, 0.78);
+    --color-primary: #3b8beb;
+    --color-primary-dark: #2a6fc9;
+    --color-primary-glow: rgba(59, 139, 235, 0.2);
+    --color-accent: #f0a030;
+    --color-accent-dark: #c88120;
+    --color-success: #2ecc71;
+    --color-success-dark: #25a25a;
+    --color-warning: #e67e22;
+    --color-danger: #e74c3c;
+    --color-info: #1abc9c;
+    /* 按钮影响等级：低影响、普通变更、注意、中高风险 */
+    --action-low: var(--color-text-secondary);
+    --action-normal: var(--color-primary);
+    --action-caution: var(--color-warning);
+    --action-danger: var(--color-danger);
+
+    /* 思源黑体全语言变体，默认简体优先 */
+    --font-cjk: 'Noto Sans CJK SC', 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK JP', 'Noto Sans CJK KR';
+    --font-heading: var(--font-cjk), sans-serif;
+    --font-body: var(--font-cjk), sans-serif;
+    --font-mono: var(--font-cjk), monospace;
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.22);
+    --shadow-md: 0 8px 22px rgba(0,0,0,0.28);
+    --shadow-lg: 0 18px 46px rgba(0,0,0,0.38);
+    --shadow-glow: 0 0 20px rgba(59, 139, 235, 0.15);
+    --glass-blur: blur(32px);
+    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    --glass-shadow: 0 22px 64px rgba(0, 0, 0, 0.4);
+    --glass-radius: 18px;
+    --tab-panel-inset: var(--space-2);
+    --transition-fast: 150ms ease;
+    --transition-normal: 250ms ease;
+    --motion-press: 90ms;
+    --motion-feedback: 150ms;
+    --motion-surface: 220ms;
+    --motion-overlay: 280ms;
+    --ease-glass-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-glass-settle: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* === 系统语言适配：英文用Times New Roman；其他均用思源黑体，对应语言变体优先 === */
+:root[lang^="zh-TW"], :root[lang^="zh-HK"] {
+    --font-cjk: 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK SC', 'Noto Sans CJK JP', 'Noto Sans CJK KR';
+}
+:root[lang^="ja"] {
+    --font-cjk: 'Noto Sans CJK JP', 'Noto Sans CJK SC', 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK KR';
+}
+:root[lang^="ko"] {
+    --font-cjk: 'Noto Sans CJK KR', 'Noto Sans CJK SC', 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK JP';
+}
+:root[lang^="en"] {
+    --font-cjk: 'Times New Roman', 'Noto Sans CJK SC', 'Noto Sans CJK TC', 'Noto Sans CJK HK', 'Noto Sans CJK JP', 'Noto Sans CJK KR';
+    --font-heading: 'Times New Roman', 'Noto Sans CJK SC', serif;
+    --font-body: 'Times New Roman', 'Noto Sans CJK SC', serif;
+    --font-mono: 'Times New Roman', 'Noto Sans CJK SC', serif;
+}
+
+/* 全局重置与页面基底 */
+/* === 隐藏数字输入框的加减箭头 === */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* === 全局重置 === */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-body);
+    background:
+        radial-gradient(circle at 14% 18%, rgba(59, 139, 235, 0.14), transparent 32%),
+        radial-gradient(circle at 86% 78%, rgba(26, 188, 156, 0.12), transparent 30%),
+        linear-gradient(135deg, rgba(20, 36, 62, 0.42), transparent 45%),
+        var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.6;
+    overflow: hidden;
+    height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* 仅编辑区域保留文本选中，页面展示文字禁止拖动和长按选中。 */
+input,
+textarea,
+select,
+[contenteditable]:not([contenteditable="false"]) {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+body::before,
+body::after {
+    content: '';
+    position: fixed;
+    width: 34vw;
+    height: 34vw;
+    pointer-events: none;
+    opacity: 0.34;
+    z-index: 0;
+}
+
+/* 光斑用径向渐变模拟高斯模糊效果，避免大型 blur 图层触发重绘条纹 */
+body::before {
+    top: -18vw;
+    left: 28vw;
+    background: radial-gradient(circle closest-side, rgba(59, 139, 235, 0.18), rgba(59, 139, 235, 0.09) 55%, transparent);
+}
+
+body::after {
+    right: -16vw;
+    bottom: -18vw;
+    background: radial-gradient(circle closest-side, rgba(26, 188, 156, 0.14), rgba(26, 188, 156, 0.07) 55%, transparent);
+}
+
+/* === 滚动条 === */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-hover);
+}

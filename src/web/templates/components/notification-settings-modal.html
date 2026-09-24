@@ -1,0 +1,55 @@
+    <!-- 客户端第三方推送管理弹窗 -->
+    <div id="client-notification-settings-modal" class="modal-overlay" aria-hidden="true">
+        <div class="modal-content notification-settings-modal-content" id="client-notification-settings-content">
+            <div class="modal-header" id="client-notification-settings-header">
+                <h3 class="modal-title" data-i18n="task_notification_settings_title">第三方推送设置</h3>
+            </div>
+            <p class="task-log-desc" data-i18n="task_notification_settings_desc">仅保存本客户端的第三方推送绑定信息。</p>
+            <section class="pushplus-manager" aria-label="第三方推送目标">
+                <div class="pushplus-target-toolbar">
+                    <h4 class="settings-section-title" data-i18n="task_notification_settings_title">第三方推送目标</h4>
+                    <button class="btn btn-outline btn-info pushplus-add-button" id="tn-channel-add" type="button" data-impact="low" data-i18n="task_notification_target_add">新增目标</button>
+                </div>
+                <div class="table-wrap pushplus-target-table-wrap" id="tn-channel-list"></div>
+            </section>
+            <div class="modal-actions">
+                <button class="btn btn-outline btn-danger" id="notification-settings-restore" data-impact="caution" data-i18n="task_notification_restore">恢复默认渠道</button>
+                <button class="btn btn-outline btn-info task-notification-test" id="tn-test" type="button" data-impact="low" data-i18n="task_notification_test">测试通知</button>
+                <div class="modal-buttons">
+                    <button class="btn btn-outline btn-info" id="notification-settings-cancel" data-impact="low" data-i18n="cancel">取消</button>
+                    <button class="btn btn-outline btn-success" id="notification-settings-save" data-impact="normal" data-i18n="save">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="client-channel-editor-modal" class="modal-overlay" aria-hidden="true">
+        <div class="modal-content pushplus-target-editor-modal-content" id="client-channel-editor-content">
+            <div class="modal-header" id="client-channel-editor-header">
+                <h3 class="modal-title" id="tn-channel-editor-title" data-i18n="task_notification_target_new">新增第三方推送目标</h3>
+            </div>
+            <section class="notification-channel-card pushplus-editor">
+                <div class="notification-channel-fields">
+                    <label><span data-i18n="task_notification_target_type">平台</span>
+                        <div class="custom-select" id="tn-channel-type">
+                            <div class="custom-select-trigger"><span class="selected-text">通用 Webhook</span></div>
+                            <div class="custom-select-options">
+                                <div class="custom-select-option selected" data-value="webhook" data-i18n="task_notification_webhook">通用 Webhook</div>
+                                <div class="custom-select-option" data-value="email" data-i18n="task_notification_email">SMTP 邮件</div>
+                                <div class="custom-select-option" data-value="telegram" data-i18n="task_notification_telegram">Telegram</div>
+                                <div class="custom-select-option" data-value="discord" data-i18n="task_notification_discord">Discord</div>
+                                <div class="custom-select-option" data-value="dingtalk" data-i18n="task_notification_dingtalk">钉钉机器人</div>
+                                <div class="custom-select-option" data-value="feishu" data-i18n="task_notification_feishu">飞书机器人</div>
+                                <div class="custom-select-option" data-value="wecom" data-i18n="task_notification_wecom">企业微信机器人</div>
+                            </div>
+                        </div>
+                    </label>
+                    <label><span data-i18n="task_notification_target_name">目标名称</span><input type="text" id="tn-channel-name" maxlength="40" class="num-input"></label>
+                </div>
+                <div class="notification-channel-fields" id="tn-channel-fields"></div>
+                <div class="pushplus-editor-actions">
+                    <button class="btn btn-outline btn-info" id="tn-channel-editor-cancel" type="button" data-impact="low" data-i18n="cancel">取消编辑</button>
+                    <button class="btn btn-outline btn-success" id="tn-channel-target-save" type="button" data-impact="normal" data-i18n="task_notification_target_save">保存目标</button>
+                </div>
+            </section>
+        </div>
+    </div>

@@ -15,6 +15,16 @@ import sys
 from copy import deepcopy
 from pathlib import Path
 from common.persistence import atomic_write_json, backup_corrupt_file
+from common.notification_channels import (
+    CHANNEL_DEFAULTS,
+    merge_channel_targets,
+    public_channel_targets,
+    public_channel_settings,
+    public_pushplus_targets,
+    sanitize_channel_settings,
+    sanitize_channel_targets,
+    sanitize_pushplus_targets,
+)
 
 
 def software_root():
@@ -32,6 +42,7 @@ VERSION = "2.0.0"
 DEFAULT_SETTINGS = {
     'port': 5000,
     'admin_port': 5001,
+    'monitor_default_view': 'full',
     'auto_open_browser': True,
     'auto_open_admin_browser': True,
     'auto_open_browser_configured': False,
@@ -58,10 +69,22 @@ DEFAULT_SETTINGS = {
         'system_sound': True,
         'queue_backlog_threshold': 10,
         'gpu_temp_threshold': 85,
+        'cpu_percent_threshold': 95,
+        'memory_percent_threshold': 90,
+        'swap_percent_threshold': 80,
+        'disk_used_percent_threshold': 90,
+        'gpu_memory_percent_threshold': 90,
+        'gpu_power_percent_threshold': 90,
+        'cpu_power_percent_threshold': 90,
         'pushplus_enabled': False,
         'pushplus_token': '',
-        'pushplus_topic': '',
-        'alert_events': ['task_failed', 'queue_backlog', 'gpu_overheat'],
+        'pushplus_targets': [],
+        'extra_channels': deepcopy(CHANNEL_DEFAULTS),
+        'extra_channel_targets': {name: [] for name in CHANNEL_DEFAULTS},
+        'alert_events': [
+            'queue_backlog', 'gpu_overheat', 'gpu_memory_pressure',
+            'memory_pressure', 'disk_space_low', 'client_kicked',
+        ],
     },
     'gpu_memory_reserve_mb': 512,
 }
@@ -91,6 +114,16 @@ _INT_RANGES = {
 }
 
 _BOOL_FIELDS = ('auto_open_browser', 'auto_open_admin_browser', 'auto_open_browser_configured')
+_MONITOR_VIEW_MODES = ('full', 'compact')
+_SETTINGS_SECTION_FIELDS = {
+    'startup': ('port', 'admin_port', 'auto_open_browser', 'auto_open_admin_browser'),
+    'monitor': ('monitor_default_view',),
+    'task': (
+        'max_compute_concurrency', 'gpu_memory_reserve_mb', 'task_timeout_seconds',
+        'task_retry_count', 'request_rate_limit', 'request_rate_window_seconds',
+        'task_result_ttl_minutes', 'max_cache_mb',
+    ),
+}
 
 # notifications 内允许出现的字段及其类型校验
 _NOTIFICATION_TYPES = {
@@ -98,15 +131,31 @@ _NOTIFICATION_TYPES = {
     'system_sound': bool,
     'queue_backlog_threshold': int,
     'gpu_temp_threshold': int,
+    'cpu_percent_threshold': int,
+    'memory_percent_threshold': int,
+    'swap_percent_threshold': int,
+    'disk_used_percent_threshold': int,
+    'gpu_memory_percent_threshold': int,
+    'gpu_power_percent_threshold': int,
+    'cpu_power_percent_threshold': int,
     'pushplus_enabled': bool,
     'pushplus_token': str,
-    'pushplus_topic': str,
+    'pushplus_targets': list,
     'alert_events': list,
+    'extra_channels': dict,
+    'extra_channel_targets': dict,
 }
 
 _NOTIFICATION_INT_RANGES = {
     'queue_backlog_threshold': (0, 100000),
     'gpu_temp_threshold': (0, 150),
+    'cpu_percent_threshold': (1, 100),
+    'memory_percent_threshold': (1, 100),
+    'swap_percent_threshold': (1, 100),
+    'disk_used_percent_threshold': (1, 100),
+    'gpu_memory_percent_threshold': (1, 100),
+    'gpu_power_percent_threshold': (1, 100),
+    'cpu_power_percent_threshold': (1, 100),
 }
 
 
@@ -153,6 +202,9 @@ def public_settings(settings):
     notifications = dict(public.get('notifications') or {})
     notifications['pushplus_token_configured'] = bool(notifications.get('pushplus_token'))
     notifications.pop('pushplus_token', None)
+    notifications['pushplus_targets'] = public_pushplus_targets(notifications.get('pushplus_targets'))
+    notifications['extra_channels'] = public_channel_settings(notifications.get('extra_channels'))
+    notifications['extra_channel_targets'] = public_channel_targets(notifications.get('extra_channel_targets'))
     public['notifications'] = notifications
     return public
 
@@ -174,6 +226,10 @@ def _validate_field(key, value):
         if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
             raise ValueError('allowed_hosts 必须是字符串数组')
         return [item.strip().lower() for item in value if item.strip()][:64]
+    if key == 'monitor_default_view':
+        if value not in _MONITOR_VIEW_MODES:
+            raise ValueError('monitor_default_view 必须是 full 或 compact')
+        return value
     if key == 'notifications':
         if not isinstance(value, dict):
             raise ValueError('notifications 必须是对象')
@@ -186,6 +242,9 @@ def _sanitize_notifications(data):
     merged = deepcopy(DEFAULT_SETTINGS['notifications'])
     if not isinstance(data, dict):
         return merged
+    has_pushplus_targets = 'pushplus_targets' in data
+    has_channel_targets = 'extra_channel_targets' in data
+    has_legacy_channels = 'extra_channels' in data
     for key, value in data.items():
         expected = _NOTIFICATION_TYPES.get(key)
         if expected is None:
@@ -198,11 +257,43 @@ def _sanitize_notifications(data):
             if not lo <= value <= hi:
                 continue
             merged[key] = value
+        elif key == 'extra_channels':
+            merged[key] = sanitize_channel_settings(value)
+        elif key == 'pushplus_targets':
+            merged[key] = sanitize_pushplus_targets(value)
+        elif key == 'extra_channel_targets':
+            merged[key] = sanitize_channel_targets(value)
         elif isinstance(value, expected):
             if key == 'alert_events' and any(not isinstance(item, str) for item in value):
                 continue
             merged[key] = value
+    if not has_pushplus_targets and merged['pushplus_token']:
+        merged['pushplus_targets'] = [{
+            'id': 'legacy-default',
+            'name': '默认 PushPlus',
+            'token': merged['pushplus_token'],
+            'enabled': merged['pushplus_enabled'],
+        }]
+    if not has_channel_targets and has_legacy_channels:
+        merged['extra_channel_targets'] = sanitize_channel_targets(merged['extra_channels'])
     return merged
+
+
+def _merge_pushplus_targets(existing, incoming):
+    """后台页面不会回传旧 Token，按目标 ID 合并保留未修改凭据。"""
+    previous = {item['id']: item for item in sanitize_pushplus_targets(existing)}
+    merged = []
+    if not isinstance(incoming, list):
+        return merged
+    for item in incoming:
+        if not isinstance(item, dict):
+            continue
+        candidate = dict(item)
+        target_id = str(candidate.get('id', '')).strip()
+        if not str(candidate.get('token', '')).strip() and target_id in previous:
+            candidate['token'] = previous[target_id]['token']
+        merged.append(candidate)
+    return sanitize_pushplus_targets(merged)
 
 
 def load_settings():
@@ -227,6 +318,9 @@ def load_settings():
                 elif key == 'allowed_hosts':
                     if isinstance(value, list) and all(isinstance(item, str) for item in value):
                         settings[key] = [item.strip().lower() for item in value if item.strip()][:64]
+                elif key == 'monitor_default_view':
+                    if value in _MONITOR_VIEW_MODES:
+                        settings[key] = value
                 else:
                     settings[key] = value  # 未知字段保留，避免保存时丢失
             except (ValueError, TypeError):
@@ -245,6 +339,27 @@ def update_settings(**updates):
         if key == 'notifications':
             merged = dict(settings.get('notifications') or {})
             if isinstance(value, dict):
+                if isinstance(value.get('extra_channels'), dict):
+                    channels = dict(merged.get('extra_channels') or {})
+                    for name, channel in value['extra_channels'].items():
+                        previous = dict(channels.get(name) or {})
+                        if isinstance(channel, dict):
+                            previous.update(channel)
+                        channels[name] = previous
+                    value = dict(value)
+                    value['extra_channels'] = channels
+                if isinstance(value.get('pushplus_targets'), list):
+                    value = dict(value)
+                    value['pushplus_targets'] = _merge_pushplus_targets(
+                        merged.get('pushplus_targets'),
+                        value['pushplus_targets'],
+                    )
+                if isinstance(value.get('extra_channel_targets'), dict):
+                    value = dict(value)
+                    value['extra_channel_targets'] = merge_channel_targets(
+                        merged.get('extra_channel_targets'),
+                        value['extra_channel_targets'],
+                    )
                 merged.update(value)
             settings[key] = _sanitize_notifications(merged)
             continue
@@ -261,6 +376,20 @@ def update_settings(**updates):
 def reset_settings():
     """恢复默认设置并持久化"""
     settings = deepcopy(DEFAULT_SETTINGS)
+    path = _settings_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(path, settings)
+    return settings
+
+
+def reset_settings_section(section):
+    """只恢复系统设置页面中指定卡片的可见字段。"""
+    fields = _SETTINGS_SECTION_FIELDS.get(section)
+    if fields is None:
+        raise ValueError('设置卡片无效')
+    settings = load_settings()
+    for key in fields:
+        settings[key] = deepcopy(DEFAULT_SETTINGS[key])
     path = _settings_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(path, settings)

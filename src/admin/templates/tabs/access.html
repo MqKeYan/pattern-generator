@@ -1,0 +1,101 @@
+
+            <!-- 5. 访问控制 -->
+            <div class="tab-panel" id="tab-access">
+                <section class="panel-card">
+                    <h3 class="card-title">IP 白名单</h3>
+                    <div class="list-editor" data-list="whitelist" data-kind="ips">
+                        <div class="list-items" id="list-whitelist-ips"></div>
+                        <div class="btn-row">
+                            <input type="text" class="num-input list-input" placeholder="IP 或 CIDR，如 192.168.1.9">
+                            <button class="btn btn-outline btn-success" data-impact="normal">添加</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">client_id 白名单</h3>
+                    <div class="list-editor" data-list="whitelist" data-kind="client_ids">
+                        <div class="list-items" id="list-whitelist-client_ids"></div>
+                        <div class="btn-row">
+                            <input type="text" class="num-input list-input" placeholder="完整 UUID">
+                            <button class="btn btn-outline btn-success" data-impact="normal">添加</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">IP 黑名单</h3>
+                    <div class="list-editor" data-list="blacklist" data-kind="ips">
+                        <div class="list-items" id="list-blacklist-ips"></div>
+                        <div class="btn-row">
+                            <input type="text" class="num-input list-input" placeholder="IP 或 CIDR">
+                            <button class="btn btn-outline btn-danger" data-impact="caution">添加</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">client_id 黑名单</h3>
+                    <div class="list-editor" data-list="blacklist" data-kind="client_ids">
+                        <div class="list-items" id="list-blacklist-client_ids"></div>
+                        <div class="btn-row">
+                            <input type="text" class="num-input list-input" placeholder="完整 UUID">
+                            <button class="btn btn-outline btn-danger" data-impact="caution">添加</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">被拒绝访问记录</h3>
+                    <div class="table-wrap"><table class="admin-table" id="table-access-events"></table></div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">请求限制</h3>
+                    <div class="access-limit-grid">
+                        <div class="access-limit-item">
+                            <label for="ac-rate-limit">频率限制（次/窗口）</label>
+                            <input type="number" id="ac-rate-limit" class="num-input">
+                        </div>
+                        <div class="access-limit-item">
+                            <label for="ac-rate-window">时间窗口（秒）</label>
+                            <input type="number" id="ac-rate-window" class="num-input">
+                        </div>
+                        <div class="access-limit-item">
+                            <label for="ac-request-body-mb">单次请求体上限（MB）</label>
+                            <input type="number" id="ac-request-body-mb" class="num-input">
+                        </div>
+                        <div class="access-limit-item">
+                            <label for="ac-max-clients">最大客户端数</label>
+                            <input type="number" id="ac-max-clients" class="num-input">
+                        </div>
+                        <div class="access-limit-item">
+                            <label for="ac-max-queue">最大排队任务数</label>
+                            <input type="number" id="ac-max-queue" class="num-input">
+                        </div>
+                        <div class="access-limit-item">
+                            <label for="ac-concurrency">最大并发数</label>
+                            <input type="number" id="ac-concurrency" class="num-input">
+                        </div>
+                        <div class="access-limit-item">
+                            <label for="ac-reserve">GPU 显存预留（MB）</label>
+                            <input type="number" id="ac-reserve" class="num-input">
+                        </div>
+                        <div class="access-limit-item">
+                            <label for="ac-timeout">任务超时时间（秒）</label>
+                            <input type="number" id="ac-timeout" class="num-input">
+                        </div>
+                        <div class="access-limit-item">
+                            <label for="ac-retry">任务重试次数</label>
+                            <input type="number" id="ac-retry" class="num-input">
+                        </div>
+                        <div class="access-limit-item">
+                            <label for="ac-history-tasks">历史任务保留数量</label>
+                            <input type="number" id="ac-history-tasks" class="num-input">
+                        </div>
+                        <div class="access-limit-item">
+                            <label for="ac-dead-tasks">失败任务保留数量</label>
+                            <input type="number" id="ac-dead-tasks" class="num-input">
+                        </div>
+                    </div>
+                    <div class="btn-row access-limit-actions">
+                        <button class="btn btn-outline btn-success" id="ac-save" data-impact="normal">保存限制设置</button>
+                        <button class="btn btn-outline btn-info" id="ac-reset" data-impact="caution">恢复默认值</button>
+                    </div>
+                </section>
+            </div>

@@ -1,0 +1,21 @@
+
+    <!-- Toast提示 -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- 加载遮罩 -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p id="loading-text" data-i18n="computing">计算中...</p>
+        <button class="btn btn-outline btn-danger" id="loading-cancel" data-impact="caution" style="display:none;" data-i18n="cancel_task">取消任务</button>
+    </div>
+
+    <!-- 当前客户端任务日志弹窗 -->
+    <div class="modal-overlay" id="client-task-log-modal" aria-hidden="true">
+        <section class="modal-content task-log-modal-content" role="dialog" aria-modal="true" aria-labelledby="client-task-log-title">
+            <div class="task-log-modal-header">
+                <h3 class="modal-title" id="client-task-log-title" data-i18n="client_task_log_title">本客户端任务日志</h3>
+            </div>
+            <p class="task-log-desc" data-i18n="client_task_log_desc">仅显示本窗口客户端提交的任务日志。</p>
+            <div class="task-log-stream" id="client-task-log-stream" aria-live="polite"></div>
+        </section>
+    </div>

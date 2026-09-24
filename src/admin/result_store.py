@@ -2,13 +2,10 @@
 
 import json
 import os
+import tempfile
 import threading
 import time
 from pathlib import Path
-from common.config import software_root
-
-
-SOFTWARE_ROOT = software_root()
 
 
 class ResultStore:
@@ -17,7 +14,9 @@ class ResultStore:
     def __init__(self, settings, logger=None, cache_dir=None):
         self.settings = settings
         self.log = logger
-        self.cache_dir = Path(cache_dir or SOFTWARE_ROOT / 'temp' / 'result-cache')
+        self.cache_dir = Path(
+            cache_dir or Path(tempfile.gettempdir()) / 'PatternGenerator' / 'result-cache'
+        )
         self._lock = threading.RLock()
         self._index = {}
         self._stop = threading.Event()
@@ -103,7 +102,7 @@ class ResultStore:
         except (OSError, TypeError, ValueError) as exc:
             self._discard_file(temp_path)
             if self.log:
-                self.log.error(f'结果缓存写入失败: {exc}')
+                self.log.error_event('cache_result_write_failed', detail={'error': exc})
             return False
 
     def get(self, client_id, include_animation=True):
@@ -128,6 +127,20 @@ class ResultStore:
                     self._index.get(client_id, {}).pop(cache_type, None)
                 self._discard_file(item['path'])
         return result or None
+
+    def get_task(self, client_id, task_id):
+        """按任务 ID 读取已落盘结果，供任务完成后的首次结果交付使用。"""
+        if not client_id or not task_id or Path(task_id).name != task_id:
+            return None
+        path = self.cache_dir / f'{task_id}.json'
+        try:
+            envelope = self._read_file(path)
+            if envelope['client_id'] != client_id:
+                return None
+            return envelope['data']
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            self._discard_file(path)
+            return None
 
     def remove_client(self, client_id):
         with self._lock:
@@ -208,4 +221,4 @@ class ResultStore:
                 self.cleanup()
             except Exception as exc:
                 if self.log:
-                    self.log.error(f'结果缓存清理失败: {type(exc).__name__}')
+                    self.log.error_event('cache_result_cleanup_failed', detail={'exception': type(exc).__name__})

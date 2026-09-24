@@ -10,10 +10,11 @@ import gc
 import os
 import re
 import threading
+from pathlib import Path
 
 from core.config import GRID_SIZE, MODEL_CONFIGS, MODEL_INIT_RANGES, PARAM_NAMES, MODEL_DISPLAY_NAMES
 from core.simulation import PatternSimulator, SimulationCancelled
-from core.visualization import PatternVisualizer
+from core.task_worker import execute_isolated_task
 from common.config import load_settings, VERSION
 from admin.logger import get_logger
 from admin.monitor import SystemMonitor
@@ -64,13 +65,21 @@ class PresenceSockets:
             sessions[key] = (ws, loop)
             return True
 
-    def unregister(self, client_id, session_id):
+    def unregister(self, client_id, session_id, websocket=None):
         with self._lock:
             sessions = self._items.get(client_id)
-            if sessions:
-                sessions.pop(session_id or client_id, None)
-                if not sessions:
-                    self._items.pop(client_id, None)
+            if not sessions:
+                return 'missing'
+            key = session_id or client_id
+            current = sessions.get(key)
+            if current is None:
+                return 'missing'
+            if websocket is not None and current[0] is not websocket:
+                return 'replaced'
+            sessions.pop(key, None)
+            if not sessions:
+                self._items.pop(client_id, None)
+            return 'removed'
 
     def close_all(self, client_id, code=4001):
         """关闭该客户端的全部页面连接，返回成功调度的关闭数量"""
@@ -131,73 +140,86 @@ def service_info():
 
 use_cuda = __import__('torch').cuda.is_available()
 simulator = PatternSimulator(grid_size=GRID_SIZE, use_cuda=use_cuda)
-visualizer = PatternVisualizer()
 monitor = SystemMonitor(logger=log, settings=settings)
 clients = ClientManager(logger=log, settings=settings)
 access = AccessControl(logger=log)
 notifier = NotificationManager(logger=log, settings=settings)
+monitor.alert_cb = notifier.check_metrics
 presence_sockets = PresenceSockets()
 client_cache = ResultStore(settings=settings, logger=log)
 
 
+def persist_task_result(task, result):
+    """任务完成后立即将结果转存磁盘，避免大型图表常驻任务内存。"""
+    if not task.client_id or not isinstance(result, dict):
+        return False
+    if task.type == 'simulate':
+        return client_cache.put(task.client_id, task.task_id, 'simulation', {
+            'type': 'simulation',
+            'viz_2d': result.get('viz_2d'),
+            'viz_3d': result.get('viz_3d'),
+            'model': result.get('model'),
+            'iterations': result.get('iterations'),
+        })
+    if task.type == 'animate':
+        return client_cache.put(task.client_id, task.task_id, 'animation', {
+            'type': 'animation',
+            'animation': result.get('animation'),
+            'model': result.get('model'),
+            'start_iteration': result.get('start_iteration'),
+        })
+    return False
+
+
+def release_runtime_memory():
+    """回收已无引用的任务对象与 CUDA 缓存，不强制压缩进程工作集。"""
+    summary = {'gc_collected': gc.collect(), 'cuda_cache_released': False}
+    if use_cuda:
+        try:
+            torch = __import__('torch')
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+            summary['cuda_cache_released'] = True
+        except Exception:
+            pass
+    return summary
+
+
 def execute_task(task):
-    """任务队列的工作函数：执行模拟/动画并生成可视化数据（在线程池中运行）"""
-    payload = task.payload
-    model = payload['model']
-    params = payload['params']
-    device_id = task.gpu_id
-    cancel_event = task.cancel_event
-
-    def progress_cb(p):
-        task.set_progress(p)
-
+    """任务队列的工作函数：在独立子进程中执行计算。"""
     try:
-        if task.type == 'simulate':
-            x_data, y_data, evolution_data = simulator.simulate(
-                model, params, payload['iterations'],
-                init_x_range=payload['init_x_range'], init_y_range=payload['init_y_range'],
-                track_points=payload.get('track_points'),
-                cancel_event=cancel_event, progress_cb=progress_cb, device_id=device_id,
-            )
-            viz_2d = visualizer.create_comprehensive_plot(
-                x_data, y_data, evolution_data, payload.get('track_points'), model, lang=payload.get('lang', 'zh-CN'))
-            viz_3d = visualizer.create_3d_pattern(x_data, model, lang=payload.get('lang', 'zh-CN'))
-            return {'viz_2d': viz_2d, 'viz_3d': viz_3d, 'model': model, 'iterations': payload['iterations']}
-
-        if task.type == 'animate':
-            total_iterations = payload['frames'] + payload['start_frame']
-            x_history, y_history = simulator.simulate_with_history(
-                model, params, total_iterations, start_from=payload['start_frame'],
-                init_x_range=payload['init_x_range'], init_y_range=payload['init_y_range'],
-                cancel_event=cancel_event, progress_cb=progress_cb, device_id=device_id,
-            )
-            anim = visualizer.create_animation_frames(x_history, y_history, start_iteration=payload['start_frame'])
-            return {'animation': anim, 'model': model, 'start_iteration': payload['start_frame']}
-
-        raise ValueError(f'未知任务类型: {task.type}')
+        payload = dict(task.payload)
+        payload.pop('client_notifications', None)
+        return execute_isolated_task(
+            payload,
+            task.gpu_id,
+            task.cancel_event.is_set,
+            task.set_progress,
+        )
     except SimulationCancelled as e:
         raise TaskCancelled(str(e)) from e
-    finally:
-        gc.collect()
-        if use_cuda:
-            __import__('torch').cuda.empty_cache()
 
 
 task_queue = TaskQueue(logger=log, settings=settings, clients=clients,
-                       monitor=monitor, notifier=notifier, task_fn=execute_task)
+                       monitor=monitor, notifier=notifier, task_fn=execute_task,
+                       result_persist=persist_task_result,
+                       result_release=release_runtime_memory)
 
 
 def asset_version(*paths):
     """用静态资源修改时间生成缓存版本，避免样式更新被旧缓存遮蔽"""
     if not paths:
-        base_path = os.path.dirname(__file__)
+        base_path = os.path.dirname(os.path.dirname(__file__))
         paths = (
-            os.path.join(base_path, 'web', 'static', 'css', 'style.css'),
-            os.path.join(base_path, 'web', 'static', 'js', 'i18n.js'),
-            os.path.join(base_path, 'web', 'static', 'js', 'app.js'),
+            os.path.join(base_path, 'web', 'static'),
+            os.path.join(base_path, 'admin', 'static'),
         )
     try:
-        return '.'.join(str(int(os.path.getmtime(path))) for path in paths)
+        files = []
+        for path in paths:
+            item = Path(path)
+            files.extend(sorted(entry for entry in item.rglob('*') if entry.is_file()) if item.is_dir() else [item])
+        return '.'.join(str(int(os.path.getmtime(path))) for path in files)
     except OSError:
         return VERSION
 

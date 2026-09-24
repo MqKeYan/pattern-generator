@@ -1,0 +1,21 @@
+
+            <!-- 4. 客户端管理 -->
+            <div class="tab-panel" id="tab-clients">
+                <section class="panel-card">
+                    <h3 class="card-title">批量操作</h3>
+                    <div class="btn-row">
+                        <span id="client-selected-count">已选 0 个</span>
+                        <button class="btn btn-outline btn-white" id="client-refresh" data-impact="low">刷新</button>
+                        <button class="btn btn-outline btn-accent" data-client-batch="remark" data-impact="low">备注选中</button>
+                        <button class="btn btn-outline btn-success" data-client-batch="resume" data-impact="normal">恢复选中</button>
+                        <button class="btn btn-outline btn-warning" data-client-batch="pause" data-impact="caution">暂停选中</button>
+                        <button class="btn btn-outline btn-danger" data-client-batch="clear-cache" data-impact="danger">清缓存选中</button>
+                        <button class="btn btn-outline btn-danger" data-client-batch="kick" data-impact="danger">踢出选中</button>
+                        <button class="btn btn-outline btn-danger" data-client-batch="delete" data-impact="danger">删除选中</button>
+                    </div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">客户端列表</h3>
+                    <div class="table-wrap"><table class="admin-table" id="table-clients"></table></div>
+                </section>
+            </div>

@@ -1,0 +1,25 @@
+    <!-- 脚本 -->
+    <!-- 页面渲染前恢复上次标签位置，刷新时完全保持位置不变 -->
+    <script>
+        (function () {
+            document.body.classList.add('is-initializing');
+            const pathTabs = {'/': 'tab-2d', '/2d': 'tab-2d', '/3d': 'tab-3d', '/animation': 'tab-anim', '/settings': null, '/pushplus': null};
+            const savedTab = pathTabs[location.pathname] || sessionStorage.getItem('active_tab');
+            if (savedTab && document.getElementById(savedTab)) {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === savedTab));
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === savedTab));
+            }
+        })();
+    </script>
+    <!-- 服务端内联配置：主界面初始化时同步读取，刷新首帧即渲染完整侧边栏 -->
+    <script>
+        window.INIT_CONFIG = {{ init_config | tojson }};
+    </script>
+    <!-- 共享层 + 主界面模块 -->
+    <script src="/static/js/shared/i18n.js?v={{ init_config.asset_ver }}"></script>
+    <script src="/static/js/app/core.js?v={{ init_config.asset_ver }}"></script>
+    <script src="/static/js/app/task-notifications.js?v={{ init_config.asset_ver }}"></script>
+    <script src="/static/js/app/sidebar.js?v={{ init_config.asset_ver }}"></script>
+    <script src="/static/js/app/charts.js?v={{ init_config.asset_ver }}"></script>
+    <script src="/static/js/app/animation.js?v={{ init_config.asset_ver }}"></script>
+    <script src="/static/js/app/ui.js?v={{ init_config.asset_ver }}"></script>

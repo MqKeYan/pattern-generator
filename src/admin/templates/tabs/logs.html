@@ -1,0 +1,30 @@
+
+            <!-- 7. 日志 -->
+            <div class="tab-panel" id="tab-logs">
+                <section class="panel-card">
+                    <div class="btn-row log-toolbar">
+                        <div class="custom-select" id="log-level" value="">
+                            <div class="custom-select-trigger"><span class="selected-text">全部级别</span></div>
+                            <div class="custom-select-options">
+                                <div class="custom-select-option selected" data-value="">全部级别</div>
+                                <div class="custom-select-option" data-value="INFO">INFO</div>
+                                <div class="custom-select-option" data-value="WARNING">WARNING</div>
+                                <div class="custom-select-option" data-value="ERROR">ERROR</div>
+                            </div>
+                        </div>
+                        <input type="text" id="log-search" class="num-input log-search" placeholder="搜索日志...">
+                        <button class="btn btn-outline btn-danger" id="log-clear-view" data-impact="danger">清空显示</button>
+                    </div>
+                    <div class="log-stream" id="log-stream"></div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="card-title">日志下载</h3>
+                    <div class="btn-row">
+                        <div class="custom-select" id="log-download-file" value="">
+                            <div class="custom-select-trigger"><span class="selected-text"></span></div>
+                            <div class="custom-select-options"></div>
+                        </div>
+                        <button class="btn btn-outline btn-primary" id="log-download" data-impact="normal">下载日志文件</button>
+                    </div>
+                </section>
+            </div>

@@ -1,0 +1,56 @@
+
+    <script>window.ADMIN_CONFIG = {{ init_config | tojson }};</script>
+    <script>
+        // 刷新后台页面时恢复上次所在的标签页。
+        (function () {
+            const pathTabs = {
+                '/admin/': 'tab-overview',
+                '/admin/monitor': 'tab-monitor',
+                '/admin/monitor/cpu': 'tab-monitor',
+                '/admin/monitor/memory': 'tab-monitor',
+                '/admin/monitor/gpu': 'tab-monitor',
+                '/admin/monitor/disk': 'tab-monitor',
+                '/admin/monitor/network': 'tab-monitor',
+                '/admin/monitor/service': 'tab-monitor',
+                '/admin/monitor/full': 'tab-monitor',
+                '/admin/monitor/compact': 'tab-monitor',
+                '/admin/tasks': 'tab-tasks',
+                '/admin/clients': 'tab-clients',
+                '/admin/access': 'tab-access',
+                '/admin/notify': 'tab-notify',
+                '/admin/pushplus': 'tab-notify',
+                '/admin/logs': 'tab-logs',
+                '/admin/settings': 'tab-settings',
+            };
+            const monitorCategories = {
+                '/admin/monitor': 'overview',
+                '/admin/monitor/cpu': 'cpu',
+                '/admin/monitor/memory': 'memory',
+                '/admin/monitor/gpu': 'gpu',
+                '/admin/monitor/disk': 'disk',
+                '/admin/monitor/network': 'network',
+                '/admin/monitor/service': 'service',
+                '/admin/monitor/full': 'overview',
+                '/admin/monitor/compact': 'overview',
+            };
+            const savedTab = pathTabs[location.pathname] || sessionStorage.getItem('admin_active_tab');
+            if (savedTab && document.getElementById(savedTab)) {
+                document.querySelectorAll('.admin-nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === savedTab));
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === savedTab));
+            }
+            const monitorCategory = monitorCategories[location.pathname]
+                || sessionStorage.getItem('admin_monitor_category')
+                || 'overview';
+            document.querySelectorAll('.monitor-category-btn').forEach(button => {
+                button.classList.toggle('active', button.dataset.monitorCategory === monitorCategory);
+            });
+        })();
+    </script>
+    <!-- 共享层 + 后台模块 -->
+    <script src="/static/js/shared/i18n.js?v={{ init_config.asset_ver }}"></script>
+    <script src="/admin/static/js/state.js?v={{ init_config.asset_ver }}"></script>
+    <script src="/admin/static/js/connection.js?v={{ init_config.asset_ver }}"></script>
+    <script src="/admin/static/js/tabs.js?v={{ init_config.asset_ver }}"></script>
+    <script src="/admin/static/js/monitor-data.js?v={{ init_config.asset_ver }}"></script>
+    <script src="/admin/static/js/monitor-render.js?v={{ init_config.asset_ver }}"></script>
+    <script src="/admin/static/js/pages.js?v={{ init_config.asset_ver }}"></script>

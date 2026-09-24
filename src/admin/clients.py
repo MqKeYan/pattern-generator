@@ -21,7 +21,7 @@ OFFLINE_AFTER_SECONDS = 5 * 60
 _PERSIST_FIELDS = (
     'client_name', 'ip', 'first_seen', 'total_requests', 'total_tasks',
     'total_compute_time', 'success_count', 'failed_count', 'cancelled_count',
-    'tags', 'remark',
+    'online_duration_seconds', 'tags', 'remark',
 )
 
 
@@ -32,6 +32,8 @@ class Client:
         self.ip = ip
         self.first_seen = time.time()
         self.last_seen = self.first_seen
+        self.online_started_at = self.first_seen
+        self.online_duration_seconds = 0.0
         self.status = 'online'
         self.current_task_id = None
         self.sessions = {}
@@ -46,6 +48,10 @@ class Client:
         self.remark = ''
 
     def to_dict(self):
+        now = time.time()
+        online_duration = self.online_duration_seconds
+        if self.online_started_at is not None:
+            online_duration += max(0, now - self.online_started_at)
         return {
             'client_id': self.client_id,
             'client_name': self.client_name,
@@ -57,7 +63,7 @@ class Client:
             'total_requests': self.total_requests,
             'total_tasks': self.total_tasks,
             'total_compute_time': round(self.total_compute_time, 2),
-            'online_duration_seconds': round(max(0, self.last_seen - self.first_seen)),
+            'online_duration_seconds': round(max(0, online_duration)),
             'success_count': self.success_count,
             'failed_count': self.failed_count,
             'cancelled_count': self.cancelled_count,
@@ -105,12 +111,22 @@ class ClientManager:
                 max_clients = max(1, int(self.settings.get('max_clients', 1024)))
                 if len(self._clients) >= max_clients:
                     if self.log:
-                        self.log.warning('客户端数量达到上限，拒绝新客户端')
+                        self.log.warning_event(
+                            'client_access_rejected',
+                            client_id=client_id,
+                        )
                     return None
                 client = Client(client_id, client_name, ip)
                 self._clients[client_id] = client
                 if self.log:
-                    self.log.info(f'新客户端接入: {client_name or client_id} ({ip})')
+                    self.log.info_event(
+                        'client_connected',
+                        client_id=client_id,
+                        client_name=client_name,
+                        detail={'name': client_name or 'unknown', 'address': ip or 'unknown'},
+                    )
+            if not client.sessions:
+                client.online_started_at = now
             client.sessions[session_id] = now
             if websocket:
                 client.websocket_sessions.add(session_id)
@@ -154,7 +170,8 @@ class ClientManager:
 
     def sweep_offline(self):
         """清理超时页面会话，没有活动页面的客户端标记 offline"""
-        cutoff = time.time() - OFFLINE_AFTER_SECONDS
+        now = time.time()
+        cutoff = now - OFFLINE_AFTER_SECONDS
         with self._lock:
             for client in self._clients.values():
                 client.sessions = {
@@ -162,25 +179,38 @@ class ClientManager:
                     if session_id in client.websocket_sessions or seen_at >= cutoff
                 }
                 client.websocket_sessions.intersection_update(client.sessions)
-                if not client.sessions and client.status != 'offline':
-                    client.status = 'offline'
-                    client.current_task_id = None
+                if not client.sessions:
+                    self._accumulate_online_duration(client, now)
+                    if client.status != 'offline':
+                        client.status = 'offline'
+                        client.current_task_id = None
 
     def disconnect(self, client_id, session_id=None):
-        """移除页面会话；客户端没有其他页面时立即标记 offline"""
+        """移除页面会话；客户端没有其他页面时立即标记 offline。"""
         if not client_id:
             return False
         with self._lock:
             client = self._clients.get(client_id)
             if client is None:
                 return False
-            client.sessions.pop(session_id or client_id, None)
-            client.websocket_sessions.discard(session_id or client_id)
+            session_key = session_id or client_id
+            client.sessions.pop(session_key, None)
+            client.websocket_sessions.discard(session_key)
             if not client.sessions:
+                now = time.time()
+                self._accumulate_online_duration(client, now)
                 client.status = 'offline'
                 client.current_task_id = None
-                client.last_seen = time.time() - OFFLINE_AFTER_SECONDS - 1
+                client.last_seen = now
             return True
+
+    @staticmethod
+    def _accumulate_online_duration(client, now):
+        """结算当前在线区间，避免把离线时间计入累计时长。"""
+        if client.online_started_at is None:
+            return
+        client.online_duration_seconds += max(0, now - client.online_started_at)
+        client.online_started_at = None
 
     def _start_sweep_loop(self):
         """启动守护线程，定期清扫超时未活动的客户端"""
@@ -197,7 +227,7 @@ class ClientManager:
                 self.sweep_offline()
             except Exception:
                 if self.log:
-                    self.log.error('客户端离线清扫失败', exc_info=True)
+                    self.log.error_event('client_sweep_failed')
 
     def stop(self):
         """停止清扫线程；服务端退出时调用"""
@@ -265,6 +295,7 @@ class ClientManager:
                     continue
                 client = Client(client_id)
                 client.status = 'offline'  # 重启后一律 offline，等活动恢复
+                client.online_started_at = None
                 for field in _PERSIST_FIELDS:
                     if field in fields:
                         setattr(client, field, fields[field])
@@ -273,6 +304,11 @@ class ClientManager:
     def save(self, peaks=None):
         """落盘客户端统计与资源峰值汇总"""
         with self._lock:
+            now = time.time()
+            for client in self._clients.values():
+                if client.online_started_at is not None:
+                    client.online_duration_seconds += max(0, now - client.online_started_at)
+                    client.online_started_at = now
             if peaks is not None:
                 self._peaks = peaks
             data = {
@@ -289,7 +325,7 @@ class ClientManager:
             return True
         except OSError as e:
             if self.log:
-                self.log.error(f'统计落盘失败: {e}')
+                self.log.error_event('stats_persist_failed', detail={'error': e})
             return False
 
     def clear_all_stats(self):
