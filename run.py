@@ -1,13 +1,15 @@
 """启动脚本 - 同时启动主服务（局域网）与后台管理中心（仅本机）
 
-主服务: 0.0.0.0:<port>   FastAPI + Uvicorn（单 worker）
+主服务: <局域网IP>:<port>   FastAPI + Uvicorn（单 worker，仅局域网）
 后台:   127.0.0.1:<admin_port>  FastAPI + Uvicorn（单 worker，仅本机）
 任一服务异常退出或后台触发「停止所有服务」时，整体退出并清理资源。
 """
 
 import sys
 import os
+import ctypes
 import gc
+import multiprocessing
 import msvcrt
 import signal
 import subprocess
@@ -73,6 +75,7 @@ from common.startup import (
     get_port_pids,
     show_port_status,
     kill_port_processes,
+    cleanup_same_software_instances,
 )
 
 startup_settings = load_settings()
@@ -81,6 +84,36 @@ ADMIN_PORT = startup_settings['admin_port']
 AUTO_OPEN_BROWSER = startup_settings['auto_open_browser']
 AUTO_OPEN_ADMIN_BROWSER = startup_settings['auto_open_admin_browser']
 AUTO_OPEN_BROWSER_CONFIGURED = startup_settings['auto_open_browser_configured']
+
+shutdown_event = threading.Event()
+_console_handler_ref = None
+
+
+def install_windows_console_handler():
+    """监听 Ctrl+C、窗口关闭及系统注销/关机事件。"""
+    global _console_handler_ref
+    if os.name != 'nt':
+        return
+
+    try:
+        from ctypes import wintypes
+
+        handler_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.DWORD)
+
+        def console_handler(ctrl_type):
+            if ctrl_type in (0, 1, 2, 5, 6):
+                shutdown_event.set()
+                return True
+            return False
+
+        callback = handler_type(console_handler)
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel32.SetConsoleCtrlHandler.argtypes = [handler_type, wintypes.BOOL]
+        kernel32.SetConsoleCtrlHandler.restype = wintypes.BOOL
+        if kernel32.SetConsoleCtrlHandler(callback, True):
+            _console_handler_ref = callback
+    except (AttributeError, OSError):
+        _console_handler_ref = None
 
 
 def open_browser_new_window(url):
@@ -141,11 +174,11 @@ def open_browser_new_window(url):
         webbrowser.open_new(url)
 
 
-def open_browser_when_ready(url, port):
+def open_browser_when_ready(url, port, host='127.0.0.1'):
     """等待本地服务就绪后打开浏览器"""
     for _ in range(50):
         try:
-            with socket.create_connection(('127.0.0.1', port), timeout=0.2):
+            with socket.create_connection((host, port), timeout=0.2):
                 open_browser_new_window(url)
                 return
         except OSError:
@@ -234,20 +267,31 @@ def show_instance_check_page(lan_ip):
     print("  多实例同时运行会互相覆盖端口设置，导致先启动实例的网址失效，")
     print("  并可能争抢 GPU 显存、缓存与任务队列。")
     print("=" * 60)
-    return ask_yes_no("是否仍要继续启动新实例？(y/n): ")
+    if ask_yes_no("是否仍要继续启动新实例？(y/n): "):
+        return True
+    if ask_yes_no("是否清理检测到的已有实例？(y/n): "):
+        cleanup_same_software_instances(instances)
+    else:
+        print("  已保留检测到的已有实例。")
+    return False
 
 
 def main():
     global PORT, ADMIN_PORT, AUTO_OPEN_BROWSER, AUTO_OPEN_ADMIN_BROWSER
+
+    shutdown_event.clear()
 
     # 获取本机局域网IP（匹配RFC 1918私网地址）
     out = subprocess.run(['ipconfig'], capture_output=True, text=True, encoding='gbk', errors='ignore').stdout
     ips = [w for l in (out or '').split('\n') for w in l.split() if w.count('.') == 3]
     lan_ip = next((ip for ip in ips if ip.startswith(('192.168.', '10.'))
                    or (ip.startswith('172.') and 16 <= int(ip.split('.')[1]) <= 31)), '未知')
-    # 首次启动自动登记当前局域网地址；其他 Host 必须由用户显式加入配置。
-    if lan_ip != '未知' and not startup_settings.get('allowed_hosts'):
-        update_settings(allowed_hosts=[lan_ip])
+    if lan_ip == '未知':
+        print("错误：未检测到局域网 IPv4 地址，主服务不会启动。")
+        return
+    # 启动预检期间只暂存新地址和端口，检测通过后再写入配置。
+    # 这样用户选择取消时，不会留下本次未启动实例的配置变更。
+    pending_allowed_hosts = [lan_ip]
 
     # 端口占用检查（单独一页显示）
     os.system('cls')
@@ -255,7 +299,6 @@ def main():
     print("  端口占用检测")
     PORT, port_busy = ensure_port_free(PORT, '主服务')
     ADMIN_PORT, admin_busy = ensure_port_free(ADMIN_PORT, '后台服务')
-    update_settings(port=PORT, admin_port=ADMIN_PORT)
     print("=" * 60)
     if port_busy or admin_busy:
         input("按回车继续启动...")
@@ -265,9 +308,16 @@ def main():
 
     # 同软件实例检测（单独一页显示）
     if not show_instance_check_page(lan_ip):
+        # 端口检查可能只修改了当前进程中的暂存值，未落盘，不触碰正在运行的旧实例。
+        PORT = startup_settings['port']
+        ADMIN_PORT = startup_settings['admin_port']
+        AUTO_OPEN_BROWSER = startup_settings['auto_open_browser']
+        AUTO_OPEN_ADMIN_BROWSER = startup_settings['auto_open_admin_browser']
         print("已取消启动，未运行新实例。")
         time.sleep(1.5)
         return
+    # 只有实例检测通过后，才提交本次预检得到的地址和端口。
+    update_settings(allowed_hosts=pending_allowed_hosts, port=PORT, admin_port=ADMIN_PORT)
     os.system('cls')
 
     # 首次运行时设置浏览器启动方式
@@ -293,8 +343,7 @@ def main():
     from web.server import app as web_app
     from admin.server import create_admin_app
 
-    shutdown_event = threading.Event()
-    admin_app = create_admin_app({
+    admin_context = {
         'log': app_context.log,
         'settings': app_context.settings,
         'monitor': app_context.monitor,
@@ -306,10 +355,13 @@ def main():
         'presence_sockets': app_context.presence_sockets,
         'simulator': app_context.simulator,
         'reload_runtime_settings': app_context.reload_runtime_settings,
-    }, shutdown_event)
+        'started_at': None,
+        'lan_ip': lan_ip,
+    }
+    admin_app = create_admin_app(admin_context, shutdown_event)
 
     web_server = uvicorn.Server(uvicorn.Config(
-        web_app, host='0.0.0.0', port=PORT,
+        web_app, host=lan_ip, port=PORT,
         log_level='warning', access_log=False, timeout_graceful_shutdown=3))
     admin_server = uvicorn.Server(uvicorn.Config(
         admin_app, host='127.0.0.1', port=ADMIN_PORT,
@@ -321,10 +373,15 @@ def main():
     def signal_handler(sig, frame):
         shutdown_event.set()
 
+    install_windows_console_handler()
     signal.signal(signal.SIGINT, signal_handler)
     if hasattr(signal, 'SIGTERM'):
         signal.signal(signal.SIGTERM, signal_handler)
+    if hasattr(signal, 'SIGBREAK'):
+        signal.signal(signal.SIGBREAK, signal_handler)
 
+    # 启动检查和倒计时结束后，显示网址时才开始计算后台运行时长。
+    admin_context['started_at'] = time.time()
     print("=" * 60)
     print(f"  斑图形成可视化系统 v{VERSION}")
     print(f"  使用设备: {'CUDA' if app_context.simulator.use_cuda else 'CPU'}")
@@ -335,45 +392,60 @@ def main():
     print("=" * 60)
 
     if AUTO_OPEN_BROWSER:
-        threading.Thread(target=open_browser_when_ready, args=(f'http://{lan_ip}:{PORT}', PORT), daemon=True).start()
+        threading.Thread(target=open_browser_when_ready, args=(f'http://{lan_ip}:{PORT}', PORT, lan_ip), daemon=True).start()
     if AUTO_OPEN_ADMIN_BROWSER:
         threading.Thread(target=open_browser_when_ready, args=(f'http://127.0.0.1:{ADMIN_PORT}', ADMIN_PORT), daemon=True).start()
 
-    web_thread.start()
-    admin_thread.start()
+    cleanup_lock = threading.Lock()
+    cleanup_done = False
 
-    # 主线程等待退出信号或任一服务异常退出
-    while not shutdown_event.is_set():
-        if not web_thread.is_alive() or not admin_thread.is_alive():
-            print("检测到服务异常退出，正在停止所有服务...")
-            break
-        time.sleep(0.5)
+    def cleanup_services():
+        """幂等停止服务并释放本实例资源。"""
+        nonlocal cleanup_done
+        with cleanup_lock:
+            if cleanup_done:
+                return
+            cleanup_done = True
 
-    # 优雅停止：通知两个 server 退出事件循环
-    web_server.should_exit = True
-    admin_server.should_exit = True
-    web_thread.join(timeout=6)
-    admin_thread.join(timeout=6)
+        # 优雅停止：通知两个 server 退出事件循环
+        web_server.should_exit = True
+        admin_server.should_exit = True
+        web_thread.join(timeout=6)
+        admin_thread.join(timeout=6)
 
-    # 统一清理：取消任务、落盘统计、释放缓存
+        # 统一清理：取消任务、落盘统计、释放缓存
+        try:
+            print("正在清理缓存与统计落盘...")
+            app_context.task_queue.stop()
+            app_context.monitor.stop()
+            app_context.clients.stop()
+            app_context.clients.save(peaks=app_context.monitor.get_peaks())
+            app_context.client_cache.clear()
+            app_context.client_cache.stop()
+            app_context.simulator.clear_memory()
+            gc.collect()
+            remove_instance_lock()
+            app_context.log.shutdown()
+            print("缓存清理完毕，服务器已停止")
+        except Exception as e:
+            print(f"清理时出错: {e}")
+
     try:
-        print("正在清理缓存与统计落盘...")
-        app_context.task_queue.stop()
-        app_context.monitor.stop()
-        app_context.clients.stop()
-        app_context.clients.save(peaks=app_context.monitor.get_peaks())
-        app_context.client_cache.clear()
-        app_context.client_cache.stop()
-        app_context.simulator.clear_memory()
-        gc.collect()
-        remove_instance_lock()
-        app_context.log.shutdown()
-        print("缓存清理完毕，服务器已停止")
-    except Exception as e:
-        print(f"清理时出错: {e}")
+        web_thread.start()
+        admin_thread.start()
+
+        # 主线程等待退出信号或任一服务异常退出
+        while not shutdown_event.is_set():
+            if not web_thread.is_alive() or not admin_thread.is_alive():
+                print("检测到服务异常退出，正在停止所有服务...")
+                break
+            time.sleep(0.5)
+    finally:
+        cleanup_services()
 
 
 if __name__ == '__main__':
+    multiprocessing.freeze_support()
     try:
         main()
     finally:
