@@ -60,7 +60,9 @@ class Task:
         self.completed_at = None
         self.retry_count = 0
         self.gpu_id = None
-        self.estimated_vram_mb = estimate_vram_mb()
+        compute = payload.get('compute', {})
+        self.estimated_vram_mb = (estimate_vram_mb()
+                                  if compute.get('gpu', compute.get('device', '').startswith('cuda:')) else 0)
         self.estimated_ram_mb = estimate_host_ram_mb(self.frames or 0)
         self.result = None
         self.error = None
@@ -86,6 +88,7 @@ class Task:
                 'completed_at': self.completed_at,
                 'retry_count': self.retry_count,
                 'gpu_id': self.gpu_id,
+                'compute': {k: v for k, v in self.payload.get('compute', {}).items() if k != 'python'},
                 'estimated_vram_mb': self.estimated_vram_mb,
                 'estimated_ram_mb': self.estimated_ram_mb,
                 'error': self.error,
@@ -112,7 +115,7 @@ class Task:
 
 class TaskQueue:
     def __init__(self, logger, settings, clients, monitor, notifier=None, task_fn=None,
-                 result_persist=None, result_release=None):
+                 result_persist=None, result_release=None, concurrency_fn=None):
         self.log = logger
         self.settings = settings
         self.clients = clients
@@ -121,6 +124,7 @@ class TaskQueue:
         self.task_fn = task_fn
         self.result_persist = result_persist
         self.result_release = result_release
+        self.concurrency_fn = concurrency_fn
 
         self._tasks = {}          # task_id -> Task（全部已知任务）
         self._waiting = deque()   # 排队中的 task_id
@@ -132,8 +136,7 @@ class TaskQueue:
         self._thread = None
         self._events = []         # 事件回调列表（WS 推送、通知等注册）
 
-        # use_cuda 判定交给 task_fn 侧；队列只在有 GPU 信息时做显存预检
-        self._use_cuda = monitor.gpu_count > 0
+        # Actual task engine/device controls scheduling, not host GPU presence.
 
     def _log_task(self, level, action, task, detail=None, exc_info=False):
         """统一记录任务事件，固定模型、模式、设备、客户端和任务字段顺序。"""
@@ -404,7 +407,7 @@ class TaskQueue:
             self._stop.wait(0.2)
 
     def _concurrency(self):
-        return max(1, int(self.settings.get('max_compute_concurrency', 1)))
+        return max(1, int(self.concurrency_fn())) if self.concurrency_fn else 1
 
     def _timeout(self):
         return max(10, int(self.settings.get('task_timeout_seconds', 300)))
@@ -441,8 +444,9 @@ class TaskQueue:
             self._prune_records()
 
     def _try_dispatch(self):
+        concurrency = self._concurrency()
         with self._lock:
-            if self._active >= self._concurrency():
+            if self._active >= concurrency:
                 return
             task = None
             for tid in self._waiting:
@@ -452,20 +456,12 @@ class TaskQueue:
                 client = self.clients.get(candidate.client_id) if self.clients else None
                 if client is not None and client.status == 'paused':
                     continue  # 暂停冻结：保留队列位置但跳过
+                if not self._compute_resources_ready(candidate):
+                    continue
                 task = candidate
                 break
             if task is None:
                 return
-
-            # 显存预检查：空闲显存不足则等待（FIFO 阻塞后续任务）
-            if self._use_cuda and self.monitor is not None:
-                gpu_id = self.monitor.pick_best_gpu()
-                free = self.monitor.gpu_free_mb(gpu_id)
-                if free is not None and free < task.estimated_vram_mb + self._reserve_mb():
-                    return
-                task.gpu_id = gpu_id
-            else:
-                task.gpu_id = None
 
             self._waiting.remove(task.task_id)
             task.status = 'running'
@@ -476,6 +472,33 @@ class TaskQueue:
         self._emit('running', task)
         executor = self._get_executor()
         executor.submit(self._run_task, task)
+
+    def _compute_resources_ready(self, task):
+        compute = task.payload.get('compute', {})
+        if not compute.get('gpu', compute.get('device', '').startswith('cuda:')):
+            task.gpu_id = None
+            return True
+        gpu_id = self.monitor.resolve_compute_gpu(compute.get('physical_id')) if self.monitor else None
+        # One active task per physical GPU. Distinct stable identities can run
+        # concurrently even when NVML cannot map their telemetry counters.
+        for running in self._tasks.values():
+            other = running.payload.get('compute', {})
+            if running.status != 'running' or not other.get('gpu', other.get('device', '').startswith('cuda:')):
+                continue
+            if gpu_id is not None and running.gpu_id is not None:
+                if gpu_id == running.gpu_id:
+                    return False
+                continue
+            physical_id, other_id = compute.get('physical_id'), other.get('physical_id')
+            if (compute.get('engine') == other.get('engine') and
+                    physical_id and other_id and physical_id != other_id):
+                continue
+            return False
+        free = self.monitor.gpu_free_mb(gpu_id) if self.monitor else None
+        if free is not None and free < task.estimated_vram_mb + self._reserve_mb():
+            return False
+        task.gpu_id = gpu_id
+        return True
 
     def _get_executor(self):
         workers = self._concurrency()

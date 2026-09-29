@@ -1,6 +1,7 @@
 
             <!-- 8. 系统设置 -->
             <div class="tab-panel" id="tab-settings">
+                <section class="panel-card settings-card" id="compute-controls" data-admin="true"></section>
                 <section class="panel-card settings-card">
                     <h3 class="card-title">启动与服务</h3>
                     <div class="form-grid settings-form-grid startup-settings-grid">
@@ -32,7 +33,6 @@
                 <section class="panel-card settings-card">
                     <h3 class="card-title">任务与调度</h3>
                     <div class="form-grid settings-form-grid task-settings-grid">
-                        <label>最大并发数</label><input type="number" id="set-concurrency" class="num-input">
                         <label>GPU 显存预留（MB）</label><input type="number" id="set-reserve" class="num-input">
                         <label>任务超时时间（秒）</label><input type="number" id="set-timeout" class="num-input">
                         <label>任务失败重试次数</label><input type="number" id="set-retry" class="num-input">

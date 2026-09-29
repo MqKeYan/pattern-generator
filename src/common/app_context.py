@@ -7,15 +7,19 @@ settings 为共享 dict：后台修改设置后调用 reload_runtime_settings() 
 
 import asyncio
 import gc
+import json
+from functools import lru_cache
 import os
 import re
+import subprocess
 import threading
 from pathlib import Path
 
 from core.config import GRID_SIZE, MODEL_CONFIGS, MODEL_INIT_RANGES, PARAM_NAMES, MODEL_DISPLAY_NAMES
-from core.simulation import PatternSimulator, SimulationCancelled
+from core.simulation import SimulationCancelled
+from common.compute import ComputeManager
 from core.task_worker import execute_isolated_task
-from common.config import load_settings, VERSION
+from common.config import load_settings, software_root, VERSION
 from admin.logger import get_logger
 from admin.monitor import SystemMonitor
 from admin.clients import ClientManager
@@ -26,6 +30,7 @@ from admin.result_store import ResultStore
 
 log = get_logger()
 settings = load_settings()
+compute_manager = ComputeManager(settings, software_root() / 'config' / 'compute-engine-state.json')
 
 
 class PresenceSockets:
@@ -101,16 +106,16 @@ def reload_runtime_settings():
     settings.update(load_settings())
 
 
-def cpu_model():
+def cpu_model(index=0):
     """CPU 型号：优先读注册表 ProcessorNameString，失败回退 platform；
     英特尔名称规范化为“Intel Core i7-12700K”形式，AMD 去掉末尾
-    “N-Core Processor”核心数后缀，只保留型号主体"""
+    “N-Core Processor”或“with Radeon Graphics”后缀，只保留型号主体"""
     import platform
     try:
         import winreg
         with winreg.OpenKey(
                 winreg.HKEY_LOCAL_MACHINE,
-                r'HARDWARE\DESCRIPTION\System\CentralProcessor\0') as key:
+                rf'HARDWARE\DESCRIPTION\System\CentralProcessor\{index}') as key:
             name = str(winreg.QueryValueEx(key, 'ProcessorNameString')[0]).strip()
     except Exception:
         name = platform.processor() or '未知'
@@ -120,27 +125,92 @@ def cpu_model():
         name = re.sub(r'^\s*\d+(?:th|st|nd|rd)\s+gen\s+', '', name, flags=re.IGNORECASE)
         name = re.sub(r'\s+cpu\s+@.*$', '', name, flags=re.IGNORECASE)
         name = re.sub(r'\s+', ' ', name).strip()
+    name = re.sub(r'\s+with\s+Radeon\s+Graphics$', '', name, flags=re.IGNORECASE)
     return re.sub(r'\s+\d+[- ]?core\s+(processor|cpu)$', '', name, flags=re.IGNORECASE).strip()
 
 
+def cpu_models():
+    """按物理插槽逐个读取 CPU 型号，相同型号保留独立项。"""
+    return [cpu_model(package['logical_processors'][0]['index'])
+            for package in monitor._cpu_packages]
+
+
+@lru_cache(maxsize=1)
+def gpu_models():
+    """读取全部物理 GPU 的型号，不按型号合并。"""
+    command = ("Get-CimInstance Win32_VideoController | "
+               "Where-Object { $_.PNPDeviceID -like 'PCI*' } | "
+               "Select-Object Name, PNPDeviceID | ConvertTo-Json -Compress")
+    try:
+        result = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', command],
+                                capture_output=True, text=True, errors='replace', timeout=5,
+                                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        if result.returncode == 0 and result.stdout.strip():
+            entries = json.loads(result.stdout)
+            entries = entries if isinstance(entries, list) else [entries]
+            seen = set()
+            models = []
+            for item in entries:
+                device_id = item.get('PNPDeviceID')
+                if device_id and device_id not in seen:
+                    seen.add(device_id)
+                    models.append(item['Name'])
+            return models
+    except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
+        pass
+    nvml = monitor._nvml
+    if nvml is None:
+        return []
+    models = []
+    for handle in monitor._gpu_handles:
+        name = nvml.nvmlDeviceGetName(handle)
+        models.append(name.decode('utf-8', errors='replace') if isinstance(name, bytes) else str(name))
+    return models
+
+
+def compute_hardware_label(selected):
+    """卡片只显示当前参与计算的硬件类型。"""
+    if not selected:
+        return '-'
+    return 'GPU' if selected.get('gpu') else 'CPU'
+
+
 def service_info():
-    """服务信息字典：主界面信息卡片与后台管理中心共用"""
-    import platform
-    import torch
+    """Describe the selected external runtime, without importing it here."""
+    status = compute_manager.status()
+    selected = status.get('selected') or {}
+    torch_info = next((e for e in status['engines'] if e['id'] == 'pytorch'), {})
     return {
-        'python': platform.python_version(),
-        # PyTorch 版本去掉 +cu132 等本地构建后缀，只保留本体版本号
-        'torch': torch.__version__.split('+', 1)[0],
-        'cuda': torch.version.cuda if torch.cuda.is_available() else None,
-        'gpu': torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
-        'cpu': cpu_model(),
-        'hardware': 'GPU' if torch.cuda.is_available() else 'CPU',
+        'python': selected.get('python_version', '-'),
+        'torch': torch_info.get('version'),
+        'engine': selected.get('engine_name', '-'),
+        'engine_version': selected.get('version', '-'),
+        'cuda': selected.get('cuda'),
+        'gpu': gpu_models(),
+        'cpu': cpu_models(),
+        'hardware': compute_hardware_label(selected),
+        'max_compute_concurrency': compute_capacity()['count'],
     }
 
-
-use_cuda = __import__('torch').cuda.is_available()
-simulator = PatternSimulator(grid_size=GRID_SIZE, use_cuda=use_cuda)
 monitor = SystemMonitor(logger=log, settings=settings)
+_compute_capacity_lock = threading.Lock()
+_compute_capacity_snapshot = None
+
+
+def initialize_compute_capacity():
+    """Detect physical compute capacity once per process, after startup engine choice."""
+    global _compute_capacity_snapshot
+    with _compute_capacity_lock:
+        if _compute_capacity_snapshot is None:
+            _compute_capacity_snapshot = compute_manager.hardware_capacity(monitor)
+        return dict(_compute_capacity_snapshot)
+
+
+def compute_capacity():
+    """Read the startup snapshot without probing hardware during service operation."""
+    return dict(_compute_capacity_snapshot or {'count': 1, 'kind': 'unknown', 'known': False})
+
+
 clients = ClientManager(logger=log, settings=settings)
 access = AccessControl(logger=log)
 notifier = NotificationManager(logger=log, settings=settings)
@@ -159,6 +229,7 @@ def persist_task_result(task, result):
             'viz_2d': result.get('viz_2d'),
             'viz_3d': result.get('viz_3d'),
             'model': result.get('model'),
+            'compute': result.get('compute'),
             'iterations': result.get('iterations'),
         })
     if task.type == 'animate':
@@ -166,24 +237,15 @@ def persist_task_result(task, result):
             'type': 'animation',
             'animation': result.get('animation'),
             'model': result.get('model'),
+            'compute': result.get('compute'),
             'start_iteration': result.get('start_iteration'),
         })
     return False
 
 
 def release_runtime_memory():
-    """回收已无引用的任务对象与 CUDA 缓存，不强制压缩进程工作集。"""
-    summary = {'gc_collected': gc.collect(), 'cuda_cache_released': False}
-    if use_cuda:
-        try:
-            torch = __import__('torch')
-            torch.cuda.empty_cache()
-            torch.cuda.ipc_collect()
-            summary['cuda_cache_released'] = True
-        except Exception:
-            pass
-    return summary
-
+    """Engine memory belongs to external workers, reclaimed when they exit."""
+    return {'gc_collected': gc.collect(), 'cuda_cache_released': False}
 
 def execute_task(task):
     """任务队列的工作函数：在独立子进程中执行计算。"""
@@ -203,7 +265,8 @@ def execute_task(task):
 task_queue = TaskQueue(logger=log, settings=settings, clients=clients,
                        monitor=monitor, notifier=notifier, task_fn=execute_task,
                        result_persist=persist_task_result,
-                       result_release=release_runtime_memory)
+                       result_release=release_runtime_memory,
+                       concurrency_fn=lambda: compute_capacity()['count'])
 
 
 def asset_version(*paths):
@@ -226,6 +289,12 @@ def asset_version(*paths):
 
 def init_config():
     """主页面内联配置（不含 settings，防敏感字段泄漏）"""
+    # 引擎探测涉及多个外部 Python 进程，不能阻塞首页 HTML。
+    # 浏览器通过 /api/compute-engines 异步取得并刷新软件信息卡片。
+    initial_service_info = {'cpu': cpu_models(),
+                            'gpu': [],
+                            'hardware': '-',
+                            'max_compute_concurrency': compute_capacity()['count']}
     return {
         'version': VERSION,
         'models': MODEL_CONFIGS,
@@ -233,7 +302,7 @@ def init_config():
         'param_names': PARAM_NAMES,
         'display_names': MODEL_DISPLAY_NAMES,
         'grid_size': GRID_SIZE,
-        'hardware_info': simulator.hardware_info,
-        'service_info': service_info(),
+        'hardware_info': '-',
+        'service_info': initial_service_info,
         'asset_ver': asset_version(),
     }

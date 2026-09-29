@@ -89,15 +89,20 @@ class AccessControl:
     def _load(self):
         for attr, path in (('_blacklist', self._blacklist_path()), ('_whitelist', self._whitelist_path())):
             data = {'ips': [], 'client_ids': []}
+            valid = False
             try:
                 loaded = json.loads(path.read_text(encoding='utf-8'))
                 if isinstance(loaded, dict):
                     data['ips'] = [str(i) for i in loaded.get('ips', []) if isinstance(i, str)]
                     data['client_ids'] = [str(c) for c in loaded.get('client_ids', []) if isinstance(c, str)]
+                    valid = True
+                else:
+                    backup_corrupt_file(path)
             except (OSError, ValueError, json.JSONDecodeError):
                 backup_corrupt_file(path)
-                pass
             setattr(self, attr, data)
+            if not valid:
+                self._save(attr, path)
 
     def _save(self, attr, path):
         try:

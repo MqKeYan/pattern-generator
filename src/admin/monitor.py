@@ -923,7 +923,7 @@ class SystemMonitor:
         return len(self._gpu_handles)
 
     def gpu_free_mb(self, index):
-        if self._nvml is None or index >= len(self._gpu_handles):
+        if self._nvml is None or index is None or index < 0 or index >= len(self._gpu_handles):
             return None
         try:
             mem = self._nvml.nvmlDeviceGetMemoryInfo(self._gpu_handles[index])
@@ -939,3 +939,22 @@ class SystemMonitor:
             if free is not None and free > best_free:
                 best, best_free = i, free
         return best
+
+    def resolve_compute_gpu(self, identity):
+        """Resolve engine UUID/PCI identity; never assume CUDA and NVML indices agree."""
+        if not identity or self._nvml is None:
+            return None
+        for i, handle in enumerate(self._gpu_handles):
+            try:
+                uuid = self._nvml.nvmlDeviceGetUUID(handle)
+                pci = self._nvml.nvmlDeviceGetPciInfo(handle).busId
+                uuid = uuid.decode() if isinstance(uuid, bytes) else str(uuid)
+                pci = pci.decode() if isinstance(pci, bytes) else str(pci)
+                requested = str(identity).lower()
+                if requested == uuid.lower() or requested.removeprefix('gpu-') == uuid.lower().removeprefix('gpu-'):
+                    return i
+                if requested.startswith('pci:') and requested[4:].lstrip('0') == pci.lower().lstrip('0'):
+                    return i
+            except Exception:
+                continue
+        return None

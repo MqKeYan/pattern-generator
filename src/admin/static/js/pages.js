@@ -84,7 +84,7 @@ function taskRow(t, actions) {
         <td class="progress-cell">${t.status === 'running'
             ? `<div class="progress-bar"><div style="width:${t.progress}%"></div></div> ${t.progress}%`
             : (t.status === 'queued' ? `#${t.queue_position || '-'}` : '-')}</td>
-        <td>${t.gpu_id != null ? 'GPU' + t.gpu_id : '-'}</td>
+        <td>${esc(t.compute ? t.compute.engine_name + ' · ' + t.compute.device : (t.gpu_id != null ? 'GPU' + t.gpu_id : '-'))}</td>
         <td>${t.retry_count || 0}</td>
         <td>${t.started_at && t.completed_at ? (t.completed_at - t.started_at).toFixed(1) + 's' : '-'}</td>
         <td class="cell-actions">${actions(t)}</td>
@@ -94,12 +94,12 @@ function taskRow(t, actions) {
 function renderTasks() {
     const cancelBtn = t => t.status === 'running' || t.status === 'queued'
         ? `<button class="btn btn-outline btn-danger" data-impact="danger" data-cancel="${t.task_id}">取消</button>` : '-';
-    $('#table-running').innerHTML = `<tr><th>任务</th><th>客户端</th><th>类型</th><th>模型</th><th>规模</th><th>状态</th><th>进度</th><th>GPU</th><th>重试</th><th>耗时</th><th>操作</th></tr>` +
+    $('#table-running').innerHTML = `<tr><th>任务</th><th>客户端</th><th>类型</th><th>模型</th><th>规模</th><th>状态</th><th>进度</th><th>引擎 / 设备</th><th>重试</th><th>耗时</th><th>操作</th></tr>` +
         (state.tasks.running.map(t => taskRow(t, cancelBtn)).join('') || '<tr><td colspan="11" style="opacity:.5">无</td></tr>');
-    $('#table-waiting').innerHTML = $('#table-running').innerHTML ? `<tr><th>任务</th><th>客户端</th><th>类型</th><th>模型</th><th>规模</th><th>状态</th><th>排队位置</th><th>GPU</th><th>重试</th><th>耗时</th><th>操作</th></tr>` +
+    $('#table-waiting').innerHTML = $('#table-running').innerHTML ? `<tr><th>任务</th><th>客户端</th><th>类型</th><th>模型</th><th>规模</th><th>状态</th><th>排队位置</th><th>引擎 / 设备</th><th>重试</th><th>耗时</th><th>操作</th></tr>` +
         (state.tasks.waiting.map(t => taskRow(t, cancelBtn)).join('') || '<tr><td colspan="11" style="opacity:.5">无</td></tr>') : '';
     const hist = (state.tasks.history || []).slice(-50).reverse();
-    $('#table-history').innerHTML = `<tr><th>任务</th><th>客户端</th><th>类型</th><th>模型</th><th>规模</th><th>状态</th><th>进度</th><th>GPU</th><th>重试</th><th>耗时</th><th>错误</th></tr>` +
+    $('#table-history').innerHTML = `<tr><th>任务</th><th>客户端</th><th>类型</th><th>模型</th><th>规模</th><th>状态</th><th>进度</th><th>引擎 / 设备</th><th>重试</th><th>耗时</th><th>错误</th></tr>` +
         (hist.map(t => taskRow(t, () => esc(t.error || '-'))).join('') || '<tr><td colspan="11" style="opacity:.5">无</td></tr>');
     bindTaskButtons();
 }
@@ -294,7 +294,6 @@ async function loadAccessSettings() {
     $('#ac-request-body-mb').value = Math.max(1, Math.round(st.max_request_body_bytes / (1024 * 1024)));
     $('#ac-max-clients').value = st.max_clients;
     $('#ac-max-queue').value = st.max_queue_tasks;
-    $('#ac-concurrency').value = st.max_compute_concurrency;
     $('#ac-reserve').value = st.gpu_memory_reserve_mb;
     $('#ac-retry').value = st.task_retry_count;
     $('#ac-timeout').value = st.task_timeout_seconds;
@@ -445,12 +444,14 @@ function renderServiceInfo() {
     target.innerHTML = [
         ['软件版本', window.ADMIN_CONFIG.version],
         ['Python 版本', info.python],
-        ['CUDA 版本', info.cuda],
         ['Pytorch 版本', info.torch],
+        ['CUDA 版本', info.cuda],
         ['CPU 型号', info.cpu],
         ['GPU 型号', info.gpu],
+        ['当前计算引擎', info.engine],
         ['计算硬件', info.hardware],
-    ].map(([k, v]) => `<span class="status-k">${k}</span><span class="status-v">${esc(v ?? '-')}</span>`).join('');
+        ['最大并发数', info.max_compute_concurrency],
+    ].map(([k, v]) => `<span class="status-k">${k}</span><span class="status-v">${Array.isArray(v) ? (v.length ? v.map(esc).join('<br>') : '-') : esc(v ?? '-')}</span>`).join('');
 }
 
 async function loadSettingsTab() {
@@ -465,10 +466,10 @@ async function loadSettingsTab() {
     $('#set-retry').value = st.task_retry_count;
     $('#set-rate-limit').value = st.request_rate_limit;
     $('#set-rate-window').value = st.request_rate_window_seconds;
-    $('#set-concurrency').value = st.max_compute_concurrency;
     $('#set-reserve').value = st.gpu_memory_reserve_mb;
     $('#set-result-ttl').value = st.task_result_ttl_minutes;
     $('#set-cache-limit').value = st.max_cache_mb;
+    await ComputeUI.settings(st);
 }
 
 function collectSettings() {
@@ -477,6 +478,7 @@ function collectSettings() {
         return isNaN(v) ? fallback : Math.min(hi, Math.max(lo, v));
     };
     return {
+        ...ComputeUI.collect(),
         port: num('#set-port', 1024, 65535, 5000),
         admin_port: num('#set-admin-port', 1024, 65535, 5001),
         monitor_default_view: $('#set-monitor-default-view').value || 'full',
@@ -486,7 +488,6 @@ function collectSettings() {
         task_retry_count: num('#set-retry', 0, 10, 1),
         request_rate_limit: num('#set-rate-limit', 1, 100000, 10),
         request_rate_window_seconds: num('#set-rate-window', 1, 3600, 60),
-        max_compute_concurrency: num('#set-concurrency', 1, 16, 1),
         gpu_memory_reserve_mb: num('#set-reserve', 0, 8192, 512),
         task_result_ttl_minutes: num('#set-result-ttl', 1, 1440, 30),
         max_cache_mb: num('#set-cache-limit', 64, 65536, 1024),

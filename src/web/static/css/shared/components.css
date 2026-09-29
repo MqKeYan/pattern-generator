@@ -69,6 +69,10 @@ button[data-impact="danger"],
 a.btn[data-impact="danger"] {
     color: var(--action-danger);
 }
+/* 刷新操作保留低影响等级，使用主色提高深色背景上的辨识度。 */
+button.btn-refresh[data-impact="low"] {
+    color: var(--color-primary);
+}
 .btn-row {
     display: flex;
     gap: 8px;

@@ -262,6 +262,13 @@
     margin-bottom: 0;
 }
 
+/* 全屏宽度下两张操作卡片各保留一行控件。 */
+@media (min-width: 1900px) {
+    .quick-actions { grid-template-columns: repeat(6, max-content); }
+    .report-actions { grid-template-columns: minmax(0, 1fr) 120px auto; }
+    #report-type { grid-column: auto; width: 200px; }
+}
+
 @media (max-width: 1100px) {
     .overview-actions-grid { grid-template-columns: 1fr; }
 }
@@ -715,7 +722,6 @@
 
 /* ---------- 后台流体布局，复用主界面 2K 基准尺寸令牌 ---------- */
 .admin-nav { gap: var(--space-1); }
-.admin-nav-btn { padding: var(--space-2) var(--space-3); }
 .stat-cards { gap: var(--space-2); margin-bottom: var(--space-3); }
 .stat-card { padding: var(--space-2) var(--space-3); }
 .stat-card .stat-value { margin-top: var(--space-1); font-size: 26px; }

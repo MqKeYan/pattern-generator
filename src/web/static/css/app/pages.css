@@ -131,6 +131,26 @@
     -webkit-backdrop-filter: blur(20px);
 }
 
+#tab-2d .viz-grid-2d > .chart-box,
+#tab-2d .viz-grid-2d > .chart-box * {
+    cursor: default !important;
+}
+
+.pattern-point-tooltip {
+    position: fixed;
+    z-index: 10000;
+    transform: translate(-50%, -100%);
+    pointer-events: none;
+    padding: 6px 9px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: rgba(20, 31, 49, 0.96);
+    box-shadow: var(--shadow-sm);
+    color: var(--color-text);
+    font: 13px/1.4 var(--font-body);
+    white-space: pre;
+}
+
 #tab-anim .viz-grid-2d > .chart-box {
     height: 420px;
     min-height: 420px;

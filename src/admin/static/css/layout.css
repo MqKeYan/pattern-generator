@@ -512,7 +512,7 @@ html[data-device-layout="mobile-portrait"] .table-wrap {
 
 
 @media (max-width: 1366px), (max-height: 760px) {
-    .admin-nav-btn { padding: 8px 10px; }
+    .admin-nav-btn { padding: 8px 10px 8px 22px; }
     .stat-cards { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
     #tab-monitor .monitor-grid { gap: 10px; }
     #tab-monitor .chart-box { min-height: 110px; }
@@ -536,6 +536,21 @@ html[data-device-layout="mobile-portrait"] .table-wrap {
     .form-grid { grid-template-columns: 1fr; }
     .startup-settings-grid > .settings-checkbox { grid-column: auto; }
     .admin-table .cell-actions { min-width: max-content; }
+}
+
+/* 桌面短窗口让整个侧栏滚动，避免信息区占满高度后挤压导航。 */
+@media (max-height: 760px) {
+    html:not([data-device-layout="mobile-portrait"]) .admin-page .sidebar {
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+    html:not([data-device-layout="mobile-portrait"]) .admin-page .sidebar-header {
+        flex-shrink: 0;
+    }
+    html:not([data-device-layout="mobile-portrait"]) .admin-page .sidebar-scroll {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
 }
 
 /* 手机竖屏下后台侧栏保持折叠，展开后使用横向导航。 */

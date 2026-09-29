@@ -1,0 +1,4 @@
+#compute-controls { display: grid; gap: 10px; }
+#compute-controls select, #compute-controls input { width: 100%; min-width: 0; }
+#compute-controls p, #compute-controls .compute-details { font-size: 13px; overflow-wrap: anywhere; }
+#compute-controls pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }

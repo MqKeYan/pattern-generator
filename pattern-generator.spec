@@ -4,7 +4,7 @@ PyInstaller 打包配置 — 斑图形成可视化系统
 使用方式：
     pyinstaller pattern-generator.spec
 白名单策略：扫描环境所有第三方模块，排除不在白名单中的，
-            PyTorch 不在白名单中，由用户自行安装。
+            第三方计算引擎不在白名单中，由用户在外部 Python 安装。
 """
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -19,14 +19,15 @@ PROJECT_ROOT = os.getcwd()
 
 # ============================================================
 # 白名单：项目实际依赖的 Python 模块
-# 注意：torch相关模块不在白名单中，由用户自行安装
+# 注意：计算引擎运行库不在白名单中，由用户自行安装到外部 Python
 # ============================================================
 _MODULE_WHITELIST = [
-    # 计算引擎
+    # 主程序可视化与结果处理依赖；不作为外部计算引擎
     'numpy',
     # Web 框架（ASGI）
     'fastapi', 'starlette', 'pydantic', 'pydantic_core', 'anyio', 'sniffio',
     'uvicorn', 'h11', 'click', 'websockets',
+    'annotated_doc', 'annotated_types', 'typing_extensions', 'typing_inspection',
     # 模板
     'jinja2', 'markupsafe',
     # 系统监控
@@ -64,14 +65,15 @@ project_hidden = [
     'admin.result_store',
 ]
 
-# PyTorch依赖的标准库模块
+# 需要显式收集的标准库模块
 stdlib_hidden = [
     'pickletools',
 ]
 
-# 排除torch相关模块（由用户自行安装）
+# 排除所有计算引擎运行库（由用户自行安装到外部 Python）
 excludes_list = [
     'torch', 'torch.*',
+    'cupy', 'cupyx', 'numba', 'llvmlite', 'warp', 'taichi', 'pyopencl',
     'nvidia', 'cuda', 'cudnn', 'triton'
 ]
 
@@ -119,12 +121,19 @@ ADDED_DATAS = [
     (os.path.join(PROJECT_ROOT, 'src', 'admin', 'static'), 'src/admin/static'),
 ]
 
+# Own worker source is executed by the selected external Python. No engine wheels/DLLs.
+ADDED_DATAS += [
+    (os.path.join(PROJECT_ROOT, 'src', 'core', name), 'compute_worker/core')
+    for name in ('__init__.py', 'external_worker.py', 'engines.py', 'simulation.py', 'models.py', 'config.py', 'numba_kernels.py', 'warp_kernels.py', 'taichi_kernels.py', 'opencl_kernels.cl')
+]
+ADDED_DATAS += [(os.path.join(PROJECT_ROOT, 'requirements.txt'), '.')]
+
 # 应用名称（小写）
 APP_NAME = 'pattern-generator'
 
 block_cipher = None
 
-# 合并排除列表（白名单排除 + 明确排除torch）
+# 合并排除列表（白名单排除 + 明确排除计算引擎）
 final_excludes = list(set(_whitelist_excludes + excludes_list))
 
 a = Analysis(

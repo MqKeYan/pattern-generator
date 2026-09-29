@@ -428,7 +428,6 @@ function bindActions() {
         '#ac-request-body-mb': 2,
         '#ac-max-clients': 1024,
         '#ac-max-queue': 100,
-        '#ac-concurrency': 1,
         '#ac-reserve': 512,
         '#ac-retry': 1,
         '#ac-timeout': 300,
@@ -445,7 +444,6 @@ function bindActions() {
                     max_request_body_bytes: (parseInt($('#ac-request-body-mb').value) || 2) * 1024 * 1024,
                     max_clients: parseInt($('#ac-max-clients').value) || 1024,
                     max_queue_tasks: parseInt($('#ac-max-queue').value) || 100,
-                    max_compute_concurrency: parseInt($('#ac-concurrency').value) || 1,
                     gpu_memory_reserve_mb: parseInt($('#ac-reserve').value) || 0,
                     task_retry_count: parseInt($('#ac-retry').value) || 0,
                     task_timeout_seconds: parseInt($('#ac-timeout').value) || 300,
@@ -526,6 +524,7 @@ function bindActions() {
         try {
             const resp = await api('/admin/api/settings', { method: 'POST', body: collectSettings() });
             applyMonitorDefaultView(resp.settings);
+            await ComputeUI.settings(resp.settings);
             showToast(resp.restart_required ? '已保存，端口等启动项需重启生效' : '已保存', 'success');
         } catch (err) { showToast(err.message, 'error'); }
     }));

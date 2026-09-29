@@ -3,6 +3,7 @@
 // zh-CN 词典
 window.I18N_LOCALES = window.I18N_LOCALES || {};
 window.I18N_LOCALES['zh-CN'] = {
+    compute_engine: '计算引擎',
     app_title: '斑图形成可视化系统',
     loading: '加载中...',
     model_select: '模型选择',
@@ -113,9 +114,11 @@ window.I18N_LOCALES['zh-CN'] = {
     info_python: 'Python 版本',
     info_cuda: 'CUDA 版本',
     info_pytorch: 'Pytorch 版本',
+    info_current_engine: '当前计算引擎',
     info_cpu: 'CPU 型号',
     info_gpu: 'GPU 型号',
     info_hardware: '计算硬件',
+    info_max_compute_concurrency: '最大并发数',
     client_online: '在线',
     client_offline: '离线',
     client_paused: '已暂停',
@@ -135,6 +138,7 @@ window.I18N_LOCALES['zh-CN'] = {
 // zh-TW 词典
 window.I18N_LOCALES = window.I18N_LOCALES || {};
 window.I18N_LOCALES['zh-TW'] = {
+    compute_engine: '計算引擎',
     app_title: '斑圖形成可視化系統',
     loading: '載入中...',
     model_select: '模型選擇',
@@ -245,9 +249,11 @@ window.I18N_LOCALES['zh-TW'] = {
     info_python: 'Python 版本',
     info_cuda: 'CUDA 版本',
     info_pytorch: 'Pytorch 版本',
+    info_current_engine: '目前計算引擎',
     info_cpu: 'CPU 型號',
     info_gpu: 'GPU 型號',
     info_hardware: '計算硬體',
+    info_max_compute_concurrency: '最大並發數',
     client_online: '線上',
     client_offline: '離線',
     client_paused: '已暫停',
@@ -267,6 +273,7 @@ window.I18N_LOCALES['zh-TW'] = {
 // en 词典
 window.I18N_LOCALES = window.I18N_LOCALES || {};
 window.I18N_LOCALES['en'] = {
+    compute_engine: 'Compute engine',
     app_title: 'Pattern Formation Visualization System',
     loading: 'Loading...',
     model_select: 'Model Selection',
@@ -377,9 +384,11 @@ window.I18N_LOCALES['en'] = {
     info_python: 'Python Version',
     info_cuda: 'CUDA Version',
     info_pytorch: 'PyTorch Version',
+    info_current_engine: 'Current Compute Engine',
     info_cpu: 'CPU Model',
     info_gpu: 'GPU Model',
     info_hardware: 'Compute Hardware',
+    info_max_compute_concurrency: 'Max Concurrency',
     client_online: 'Online',
     client_offline: 'Offline',
     client_paused: 'Paused',
@@ -399,6 +408,7 @@ window.I18N_LOCALES['en'] = {
 // ja 词典
 window.I18N_LOCALES = window.I18N_LOCALES || {};
 window.I18N_LOCALES['ja'] = {
+    compute_engine: '計算エンジン',
     app_title: 'パターン形成可視化システム',
     loading: '読み込み中...',
     model_select: 'モデル選択',
@@ -509,9 +519,11 @@ window.I18N_LOCALES['ja'] = {
     info_python: 'Python バージョン',
     info_cuda: 'CUDA バージョン',
     info_pytorch: 'PyTorch バージョン',
+    info_current_engine: '現在の計算エンジン',
     info_cpu: 'CPU 型番',
     info_gpu: 'GPU 型番',
     info_hardware: '計算ハードウェア',
+    info_max_compute_concurrency: '最大同時計算数',
     client_online: 'オンライン',
     client_offline: 'オフライン',
     client_paused: '一時停止',
@@ -531,6 +543,7 @@ window.I18N_LOCALES['ja'] = {
 // ko 词典
 window.I18N_LOCALES = window.I18N_LOCALES || {};
 window.I18N_LOCALES['ko'] = {
+    compute_engine: '계산 엔진',
     app_title: '패턴 형성 시각화 시스템',
     loading: '로딩 중...',
     model_select: '모델 선택',
@@ -641,9 +654,11 @@ window.I18N_LOCALES['ko'] = {
     info_python: 'Python 버전',
     info_cuda: 'CUDA 버전',
     info_pytorch: 'PyTorch 버전',
+    info_current_engine: '현재 계산 엔진',
     info_cpu: 'CPU 모델',
     info_gpu: 'GPU 모델',
     info_hardware: '연산 하드웨어',
+    info_max_compute_concurrency: '최대 동시 계산 수',
     client_online: '온라인',
     client_offline: '오프라인',
     client_paused: '일시중지',

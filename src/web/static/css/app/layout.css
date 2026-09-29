@@ -256,7 +256,7 @@
 .track-ops button { height: var(--button-height); padding: var(--space-1) var(--space-3); }
 
 .tab-nav {
-    height: clamp(48px, 2.305vw, 59px);
+    height: calc(var(--space-2) + 48px);
     padding: var(--space-2) var(--space-3) 0;
 }
 .tab-btn {
@@ -397,11 +397,10 @@ html[data-device-layout="mobile-portrait"] .table-wrap {
     margin-top: 0;
 }
 
-/* 动画页保留控制栏，并让曲线顶部与二维页曲线顶部使用同一高度基准。 */
+/* 动画页上排斑图与二维页等高，控制栏占用的空间由下排曲线承担。 */
 #tab-anim.active {
     display: grid;
-    /* 首帧直接使用与 JS 同源的曲线轨道公式，避免刷新时先等分再重排。 */
-    grid-template-rows: auto var(--animation-pattern-height, minmax(0, 1fr)) var(--animation-evolution-track, calc((100% + var(--space-2)) / 2));
+    grid-template-rows: auto var(--animation-pattern-height, calc((100% - var(--space-2)) / 2)) minmax(0, 1fr);
     row-gap: 0;
 }
 #tab-anim.active .viz-grid-2d {
@@ -414,7 +413,7 @@ html[data-device-layout="mobile-portrait"] .table-wrap {
 }
 #tab-anim.active > .chart-full {
     min-height: 0;
-    height: var(--two-d-row-height, auto);
+    height: auto;
     margin-top: var(--space-2);
 }
 

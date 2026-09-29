@@ -23,8 +23,9 @@ else:
 from admin.logger import LOG_DIR
 from admin.reports import generate_report
 from admin.websocket import ConnectionManager, check_ws_origin, push_loop, STARTED_AT
-from common.app_context import asset_version, service_info as host_service_info
-from common.config import public_settings, reset_settings, reset_settings_section, VERSION
+from common.app_context import (asset_version, service_info as host_service_info,
+                                compute_manager, initialize_compute_capacity)
+from common.config import DEFAULT_SETTINGS, public_settings, reset_settings, reset_settings_section, VERSION
 from common.security import (SessionStore, authenticate_request, authenticate_websocket,
                              RequestBodyLimitMiddleware, set_session_cookie,
                              valid_host_and_origin)
@@ -59,6 +60,7 @@ async def lifespan(_app):
     ctx = _app.state.ctx
     loop = asyncio.get_running_loop()
     previous_handler = _install_connection_reset_filter(loop)
+    initialize_compute_capacity()
     ctx['task_queue'].start()
     ctx['monitor'].start()
     manager = _app.state.manager
@@ -170,7 +172,7 @@ class AdminApp:
         async def admin_page(request: Request):
             settings = ctx['settings']
             # 与主界面共用同一份服务信息（软件运行主机的信息，见 app_context.service_info）
-            service_info = host_service_info()
+            service_info = await asyncio.to_thread(host_service_info)
 
             asset_ver = asset_version()
 
@@ -541,6 +543,17 @@ class AdminApp:
 
         # ---------- 系统设置 ----------
 
+        @app.get('/admin/api/compute-engines')
+        async def compute_engines():
+            return ok(await asyncio.to_thread(compute_manager.status))
+
+        @app.post('/admin/api/compute-engines/refresh')
+        async def refresh_compute_engines():
+            try:
+                return ok(await asyncio.to_thread(compute_manager.refresh_if_idle, ctx['task_queue']))
+            except ValueError as exc:
+                return fail(str(exc))
+
         @app.get('/admin/api/settings')
         async def get_settings():
             return ok({'settings': public_settings(ctx['settings'])})
@@ -553,17 +566,32 @@ class AdminApp:
                 return fail('请求体必须是 JSON')
             try:
                 from common.config import update_settings as us
-                us(**data)
+                if isinstance(data, dict) and 'max_compute_concurrency' in data:
+                    return fail('最大并发计算数量在软件启动时自动识别，不能手动设置')
+                with compute_manager._lock:
+                    changed_compute = isinstance(data, dict) and any(
+                        key in data and data[key] != ctx['settings'].get(key)
+                        for key in ('compute_engine', 'compute_device', 'compute_python'))
+                    counts = ctx['task_queue'].counts()
+                    if changed_compute and (counts['waiting'] or counts['running']):
+                        return fail('仍有排队或运行中的任务，请等待完成后再修改计算引擎、设备或 Python 路径')
+                    us(**data)
+                    ctx['reload_runtime_settings']()
             except (ValueError, TypeError) as e:
                 return fail(str(e))
-            ctx['reload_runtime_settings']()
             ctx['log'].audit_event('settings_update', target='系统设置')
             return ok({'settings': public_settings(ctx['settings']), 'restart_required': True})
 
         @app.post('/admin/api/settings/reset')
         async def settings_reset():
-            reset_settings()
-            ctx['reload_runtime_settings']()
+            with compute_manager._lock:
+                changed_compute = any(ctx['settings'].get(key) != DEFAULT_SETTINGS[key]
+                                      for key in ('compute_engine', 'compute_device', 'compute_python'))
+                counts = ctx['task_queue'].counts()
+                if changed_compute and (counts['waiting'] or counts['running']):
+                    return fail('仍有排队或运行中的任务，请等待完成后再恢复计算引擎设置')
+                reset_settings()
+                ctx['reload_runtime_settings']()
             ctx['log'].audit_event('settings_reset', target='系统设置')
             return ok({'settings': public_settings(ctx['settings']), 'restart_required': True})
 
@@ -572,10 +600,17 @@ class AdminApp:
             try:
                 data = await request.json()
                 section = data.get('section') if isinstance(data, dict) else None
-                reset_settings_section(section)
+                with compute_manager._lock:
+                    if section == 'compute':
+                        changed_compute = any(ctx['settings'].get(key) != DEFAULT_SETTINGS[key]
+                                              for key in ('compute_engine', 'compute_device', 'compute_python'))
+                        counts = ctx['task_queue'].counts()
+                        if changed_compute and (counts['waiting'] or counts['running']):
+                            return fail('仍有排队或运行中的任务，请等待完成后再恢复计算引擎设置')
+                    reset_settings_section(section)
+                    ctx['reload_runtime_settings']()
             except (ValueError, TypeError) as e:
                 return fail(str(e))
-            ctx['reload_runtime_settings']()
             ctx['log'].audit_event('settings_reset', target=f'系统设置-{section}')
             return ok({
                 'settings': public_settings(ctx['settings']),

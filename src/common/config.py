@@ -4,17 +4,20 @@
 2. VERSION：软件版本号；
 3. 设置管理：保存启动脚本与 Web 界面共同使用的配置。
 
-配置文件位于 config/settings.json（运行时自动创建）。
-迁移链：%LOCALAPPDATA%\\PatternGenerator\\settings.json → 软件根目录 settings.json → config/settings.json。
+配置文件按功能位于 config/*.json（首次读取时自动创建）。
+旧版 settings.json 先迁入 config/，再拆分到功能文件并保留备份。
 """
 
 import json
 import os
 import shutil
 import sys
+import threading
+import uuid
 from copy import deepcopy
 from pathlib import Path
-from common.persistence import atomic_write_json, backup_corrupt_file
+from common.persistence import (atomic_write_json, backup_corrupt_file,
+                                documented_config_object, ensure_config_comments)
 from common.notification_channels import (
     CHANNEL_DEFAULTS,
     merge_channel_targets,
@@ -40,13 +43,15 @@ VERSION = "2.0.0"
 
 
 DEFAULT_SETTINGS = {
+    'compute_engine': 'auto',
+    'compute_device': 'auto',
+    'compute_python': 'auto',
     'port': 5000,
     'admin_port': 5001,
     'monitor_default_view': 'full',
     'auto_open_browser': True,
     'auto_open_admin_browser': True,
     'auto_open_browser_configured': False,
-    'max_compute_concurrency': 1,
     'task_timeout_seconds': 300,
     'task_retry_count': 1,
     'request_rate_limit': 10,
@@ -93,7 +98,6 @@ DEFAULT_SETTINGS = {
 _INT_RANGES = {
     'port': (1024, 65535),
     'admin_port': (1024, 65535),
-    'max_compute_concurrency': (1, 16),
     'task_timeout_seconds': (10, 86400),
     'task_retry_count': (0, 10),
     'request_rate_limit': (1, 100000),
@@ -116,14 +120,36 @@ _INT_RANGES = {
 _BOOL_FIELDS = ('auto_open_browser', 'auto_open_admin_browser', 'auto_open_browser_configured')
 _MONITOR_VIEW_MODES = ('full', 'compact')
 _SETTINGS_SECTION_FIELDS = {
+    'compute': ('compute_engine', 'compute_device', 'compute_python'),
     'startup': ('port', 'admin_port', 'auto_open_browser', 'auto_open_admin_browser'),
     'monitor': ('monitor_default_view',),
     'task': (
-        'max_compute_concurrency', 'gpu_memory_reserve_mb', 'task_timeout_seconds',
+        'gpu_memory_reserve_mb', 'task_timeout_seconds',
         'task_retry_count', 'request_rate_limit', 'request_rate_window_seconds',
         'task_result_ttl_minutes', 'max_cache_mb',
     ),
 }
+
+# 每个持久设置只归属一个功能文件；页面与运行时代码仍使用统一 settings 字典。
+_CONFIG_FILES = {
+    'compute': ('compute_engine', 'compute_device', 'compute_python'),
+    'startup': ('port', 'admin_port', 'auto_open_browser',
+                'auto_open_admin_browser', 'auto_open_browser_configured'),
+    'monitor': ('monitor_default_view', 'metrics_window_seconds'),
+    'tasks': ('task_timeout_seconds', 'task_retry_count', 'task_result_ttl_minutes',
+              'max_cache_mb', 'max_cache_files', 'max_cache_file_mb',
+              'max_queue_tasks', 'max_history_tasks', 'max_dead_tasks',
+              'gpu_memory_reserve_mb'),
+    'access': ('allowed_hosts', 'request_rate_limit', 'request_rate_window_seconds',
+               'max_clients', 'max_presence_sockets', 'max_presence_sockets_per_client',
+               'max_request_body_bytes'),
+    'notifications': ('notifications',),
+}
+_CONFIG_KEYS = {key for fields in _CONFIG_FILES.values() for key in fields}
+_CONFIG_GROUP_FOR_KEY = {key: name for name, fields in _CONFIG_FILES.items()
+                         for key in fields}
+_SETTINGS_LOCK = threading.RLock()
+_DOCUMENTED_CONFIG_DIRS = set()
 
 # notifications 内允许出现的字段及其类型校验
 _NOTIFICATION_TYPES = {
@@ -196,9 +222,82 @@ def _migrate_legacy_settings():
         pass
 
 
+def _feature_path(name):
+    return _config_dir() / f'{name}.json'
+
+
+def _read_config_object(path):
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        if isinstance(data, dict):
+            return data, True
+    except (OSError, ValueError, TypeError):
+        pass
+    if path.exists():
+        backup_corrupt_file(path)
+    return {}, False
+
+
+def _apply_config_values(settings, data, allowed=None):
+    """Validate persisted values without discarding unrelated legacy fields."""
+    for key, value in data.items():
+        if key == '_说明':
+            continue
+        if allowed is not None and key not in allowed:
+            continue
+        try:
+            if key in ('max_compute_concurrency', 'max_compute_concurrency_configured'):
+                continue
+            if key.startswith('compute_') and key in DEFAULT_SETTINGS:
+                settings[key] = _validate_field(key, value)
+            elif key == 'notifications':
+                settings[key] = _sanitize_notifications(value)
+            elif key in _INT_RANGES:
+                lo, hi = _INT_RANGES[key]
+                if isinstance(value, int) and not isinstance(value, bool) and lo <= value <= hi:
+                    settings[key] = value
+            elif key in _BOOL_FIELDS:
+                if isinstance(value, bool):
+                    settings[key] = value
+            elif key == 'allowed_hosts':
+                if isinstance(value, list) and all(isinstance(item, str) for item in value):
+                    settings[key] = [item.strip().lower() for item in value if item.strip()][:64]
+            elif key == 'monitor_default_view':
+                if value in _MONITOR_VIEW_MODES:
+                    settings[key] = value
+            else:
+                settings[key] = value
+        except (ValueError, TypeError):
+            continue
+
+
+def _save_feature_files(settings, names=None):
+    for name in sorted(names or _CONFIG_FILES):
+        fields = _CONFIG_FILES[name]
+        atomic_write_json(_feature_path(name), {key: settings[key] for key in fields})
+    extras = {key: value for key, value in settings.items()
+              if key not in _CONFIG_KEYS and key != '_说明'}
+    if extras:
+        atomic_write_json(_feature_path('misc'), extras)
+    else:
+        _feature_path('misc').unlink(missing_ok=True)
+
+
+def _archive_legacy_settings():
+    legacy = _settings_path()
+    if not legacy.is_file():
+        return
+    archive = legacy.with_name('settings.legacy.json')
+    if archive.exists():
+        archive = legacy.with_name(f'settings.legacy-{uuid.uuid4().hex[:8]}.json')
+    legacy.rename(archive)
+
+
 def public_settings(settings):
     """生成可返回给后台前端的设置副本，隐藏通知凭据。"""
     public = dict(settings)
+    public.pop('max_compute_concurrency', None)
+    public.pop('max_compute_concurrency_configured', None)
     notifications = dict(public.get('notifications') or {})
     notifications['pushplus_token_configured'] = bool(notifications.get('pushplus_token'))
     notifications.pop('pushplus_token', None)
@@ -211,6 +310,23 @@ def public_settings(settings):
 
 def _validate_field(key, value):
     """校验单个字段，非法时抛出 ValueError"""
+    if key == 'compute_engine':
+        if not isinstance(value, str) or value not in ('auto', 'pytorch', 'numpy', 'cupy', 'numba', 'warp', 'taichi', 'pyopencl'):
+            raise ValueError('Invalid compute engine')
+        return value
+    if key == 'compute_device':
+        import re
+        if not isinstance(value, str) or not re.fullmatch(
+                r'auto|cpu|cuda:[0-9]{1,3}|vulkan:0|opencl:[0-9]{1,3}:[0-9]{1,3}', value):
+            raise ValueError('Invalid compute device')
+        return value
+    if key == 'compute_python':
+        if not isinstance(value, str) or not value.strip() or len(value) > 2048:
+            raise ValueError('Invalid Python path')
+        value = value.strip()
+        if value != 'auto' and (not Path(value).is_absolute() or Path(value).suffix.lower() != '.exe'):
+            raise ValueError('Select an absolute Python executable path')
+        return value
     if key in _INT_RANGES:
         if isinstance(value, bool) or not isinstance(value, int):
             raise ValueError(f'{key} 必须是整数')
@@ -297,89 +413,122 @@ def _merge_pushplus_targets(existing, incoming):
 
 
 def load_settings():
-    """读取设置：默认值与文件内容深度合并，未知字段原样保留"""
-    settings = deepcopy(DEFAULT_SETTINGS)
-    _migrate_legacy_settings()
-    try:
-        data = json.loads(_settings_path().read_text(encoding='utf-8'))
-        if not isinstance(data, dict):
-            return settings
-        for key, value in data.items():
+    """按优先级读取设置，并把现用功能文件校正为当前字段和系统语言说明。"""
+    with _SETTINGS_LOCK:
+        settings = deepcopy(DEFAULT_SETTINGS)
+        _migrate_legacy_settings()
+        legacy = _settings_path()
+        if legacy.is_file():
+            data, _ = _read_config_object(legacy)
+            _apply_config_values(settings, data)
+        stored = {}
+        invalid = set()
+        for name, fields in _CONFIG_FILES.items():
+            data, valid = _read_config_object(_feature_path(name))
+            _apply_config_values(settings, data, set(fields))
+            # 旧版功能文件中无法归类的扩展值搬入 misc.json，而不是整理结构时丢弃。
+            for key, value in data.items():
+                if key not in _CONFIG_KEYS and key not in (
+                        '_说明', 'max_compute_concurrency',
+                        'max_compute_concurrency_configured'):
+                    settings[key] = value
+            stored[name] = data
+            if not valid:
+                invalid.add(name)
+        misc = _feature_path('misc')
+        if misc.is_file():
+            data, valid = _read_config_object(misc)
+            _apply_config_values(settings, data, set(data) - _CONFIG_KEYS)
+            if not valid:
+                misc.unlink(missing_ok=True)
+        outdated = []
+        note_only = []
+        for name, fields in _CONFIG_FILES.items():
+            path = _feature_path(name)
+            values = {key: settings[key] for key in fields}
+            current_values = {key: value for key, value in stored[name].items()
+                              if key != '_说明'}
+            if name in invalid or current_values != values:
+                outdated.append(name)
+            elif stored[name].get('_说明') != documented_config_object(path, values)['_说明']:
+                note_only.append(name)
+        if outdated:
+            _save_feature_files(settings, outdated)
+        for name in note_only:
             try:
-                if key == 'notifications':
-                    settings[key] = _sanitize_notifications(value)
-                elif key in _INT_RANGES:
-                    lo, hi = _INT_RANGES[key]
-                    if isinstance(value, int) and not isinstance(value, bool) and lo <= value <= hi:
-                        settings[key] = value
-                elif key in _BOOL_FIELDS:
-                    if isinstance(value, bool):
-                        settings[key] = value
-                elif key == 'allowed_hosts':
-                    if isinstance(value, list) and all(isinstance(item, str) for item in value):
-                        settings[key] = [item.strip().lower() for item in value if item.strip()][:64]
-                elif key == 'monitor_default_view':
-                    if value in _MONITOR_VIEW_MODES:
-                        settings[key] = value
-                else:
-                    settings[key] = value  # 未知字段保留，避免保存时丢失
-            except (ValueError, TypeError):
-                continue
-    except (OSError, ValueError, TypeError, json.JSONDecodeError):
-        backup_corrupt_file(_settings_path())
-    return settings
+                atomic_write_json(_feature_path(name), {
+                    key: settings[key] for key in _CONFIG_FILES[name]})
+            except OSError:
+                pass  # 注释是辅助信息；写入失败不阻止使用已有的有效配置。
+        config_dir = _config_dir()
+        if config_dir not in _DOCUMENTED_CONFIG_DIRS:
+            ensure_config_comments(config_dir, skip={f'{name}.json' for name in _CONFIG_FILES})
+            _DOCUMENTED_CONFIG_DIRS.add(config_dir)
+        if all(_feature_path(name).is_file() for name in _CONFIG_FILES):
+            try:
+                _archive_legacy_settings()
+            except OSError:
+                pass  # Feature files already take precedence; keep the legacy copy.
+        return settings
 
 
 def update_settings(**updates):
     """更新设置并持久化，未知/未提及字段保持不变"""
-    settings = load_settings()
-    for key, value in updates.items():
-        if value is None:
-            continue
-        if key == 'notifications':
-            merged = dict(settings.get('notifications') or {})
-            if isinstance(value, dict):
-                if isinstance(value.get('extra_channels'), dict):
-                    channels = dict(merged.get('extra_channels') or {})
-                    for name, channel in value['extra_channels'].items():
-                        previous = dict(channels.get(name) or {})
-                        if isinstance(channel, dict):
-                            previous.update(channel)
-                        channels[name] = previous
-                    value = dict(value)
-                    value['extra_channels'] = channels
-                if isinstance(value.get('pushplus_targets'), list):
-                    value = dict(value)
-                    value['pushplus_targets'] = _merge_pushplus_targets(
-                        merged.get('pushplus_targets'),
-                        value['pushplus_targets'],
-                    )
-                if isinstance(value.get('extra_channel_targets'), dict):
-                    value = dict(value)
-                    value['extra_channel_targets'] = merge_channel_targets(
-                        merged.get('extra_channel_targets'),
-                        value['extra_channel_targets'],
-                    )
-                merged.update(value)
-            settings[key] = _sanitize_notifications(merged)
-            continue
-        try:
-            settings[key] = _validate_field(key, value)
-        except KeyError:
-            continue  # 未知字段丢弃，防止污染配置文件
-    path = _settings_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_json(path, settings)
-    return settings
+    with _SETTINGS_LOCK:
+        settings = load_settings()
+        changed = set()
+        for key, value in updates.items():
+            if value is None:
+                continue
+            if key == 'notifications':
+                merged = dict(settings.get('notifications') or {})
+                if isinstance(value, dict):
+                    if isinstance(value.get('extra_channels'), dict):
+                        channels = dict(merged.get('extra_channels') or {})
+                        for name, channel in value['extra_channels'].items():
+                            previous = dict(channels.get(name) or {})
+                            if isinstance(channel, dict):
+                                previous.update(channel)
+                            channels[name] = previous
+                        value = dict(value)
+                        value['extra_channels'] = channels
+                    if isinstance(value.get('pushplus_targets'), list):
+                        value = dict(value)
+                        value['pushplus_targets'] = _merge_pushplus_targets(
+                            merged.get('pushplus_targets'),
+                            value['pushplus_targets'],
+                        )
+                    if isinstance(value.get('extra_channel_targets'), dict):
+                        value = dict(value)
+                        value['extra_channel_targets'] = merge_channel_targets(
+                            merged.get('extra_channel_targets'),
+                            value['extra_channel_targets'],
+                        )
+                    merged.update(value)
+                settings[key] = _sanitize_notifications(merged)
+                changed.add('notifications')
+                continue
+            try:
+                settings[key] = _validate_field(key, value)
+                changed.add(_CONFIG_GROUP_FOR_KEY[key])
+            except KeyError:
+                continue  # 未知字段丢弃，防止污染配置文件
+        if changed:
+            _save_feature_files(settings, changed)
+        return settings
 
 
 def reset_settings():
     """恢复默认设置并持久化"""
-    settings = deepcopy(DEFAULT_SETTINGS)
-    path = _settings_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_json(path, settings)
-    return settings
+    with _SETTINGS_LOCK:
+        _migrate_legacy_settings()
+        settings = deepcopy(DEFAULT_SETTINGS)
+        _save_feature_files(settings)
+        try:
+            _archive_legacy_settings()
+        except OSError:
+            pass
+        return settings
 
 
 def reset_settings_section(section):
@@ -387,10 +536,9 @@ def reset_settings_section(section):
     fields = _SETTINGS_SECTION_FIELDS.get(section)
     if fields is None:
         raise ValueError('设置卡片无效')
-    settings = load_settings()
-    for key in fields:
-        settings[key] = deepcopy(DEFAULT_SETTINGS[key])
-    path = _settings_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_json(path, settings)
-    return settings
+    with _SETTINGS_LOCK:
+        settings = load_settings()
+        for key in fields:
+            settings[key] = deepcopy(DEFAULT_SETTINGS[key])
+        _save_feature_files(settings, [('tasks' if section == 'task' else section)])
+        return settings

@@ -1,26 +1,61 @@
-# python_requires>=3.13
+# 需要 64 位 Python 3.13 或更新版本 / Requires 64-bit Python 3.13 or newer
 
-# 计算引擎
-# GPU 加速 (CUDA 13.2): pip install torch --index-url https://download.pytorch.org/whl/cu132
-# 纯 CPU 模式: pip install torch
-numpy>=2.5.2                # 多维数组与数值计算
-torch>=2.14.0              # GPU/CPU张量计算
+# 应用基础依赖：下面未注释的条目由常规安装命令安装 / Base application dependencies: active lines are installed normally
+numpy>=2.5.2                # 结果处理与可视化数组 / Result processing and visualization arrays
 
-# Web 框架（ASGI）
-fastapi>=0.141.1           # Web框架（含 Starlette、原生 WebSocket）
-uvicorn>=0.52.4            # ASGI 服务器（勿装 uvicorn[standard]：uvloop 不支持 Windows）
-websockets>=17.1           # ASGI WebSocket 实现（uvicorn 默认不带，前后台实时推送必需）
-jinja2>=3.1.6              # 模板渲染
+# Web 框架 / Web framework
+fastapi>=0.141.1           # Web 框架，含 Starlette 与原生 WebSocket / Web framework with Starlette and native WebSocket
+uvicorn>=0.52.4            # ASGI 服务；Windows 不使用 uvicorn[standard] / ASGI server; avoid uvicorn[standard] on Windows
+websockets>=17.1           # 前后台实时推送 / Real-time WebSocket updates for both interfaces
+jinja2>=3.1.6              # 页面模板渲染 / Page template rendering
 
-# 系统监控
-psutil>=7.2.2              # 跨平台系统资源监控 (CPU/内存/磁盘/网络)
-nvidia-ml-py>=13.610.43    # GPU 温度、功耗、利用率监控（pynvml，非 NVIDIA 环境自动降级）
+# 系统监控 / System monitoring
+psutil>=7.2.2              # CPU、内存、磁盘和网络监控 / CPU, memory, disk and network monitoring
+nvidia-ml-py>=13.610.43    # NVIDIA GPU 监控；其他环境自动降级 / NVIDIA GPU monitoring with graceful fallback
 
-# 告警通知
-plyer>=2.1.0               # 跨平台系统通知弹窗
+# 告警通知 / Alert notifications
+plyer>=2.1.0               # 系统通知弹窗 / System notification pop-ups
 
-# 报表导出
-openpyxl>=3.1.5            # XLSX 报表导出
+# 报表导出 / Report export
+openpyxl>=3.1.5            # XLSX 报表导出 / XLSX report export
 
-# 打包构建 (开发依赖)
-pyinstaller>=6.22.2        # 打包为单文件 .exe
+# 可选外部计算引擎：以下所有条目均为注释，常规安装不会安装它们 / Optional external compute engines: all lines below are comments and will not be installed normally
+# 请在选定的外部 Python 中手动安装所需引擎；不要同时安装同一引擎的互斥变体 / Install chosen engines manually in the selected external Python; do not combine mutually exclusive variants
+
+# PyTorch CPU：仅 CPU 构建 / PyTorch CPU: CPU-only build
+# --extra-index-url https://download.pytorch.org/whl/cpu
+# torch==2.14.0+cpu
+# numpy>=2.4,<2.6
+
+# PyTorch CUDA 13.2：与 CPU 构建择一 / PyTorch CUDA 13.2: choose this or the CPU build
+# --extra-index-url https://download.pytorch.org/whl/cu132
+# torch==2.14.0+cu132
+# numpy>=2.4,<2.6
+
+# CuPy CUDA 12：与 CUDA 13 变体互斥，还需系统 NVIDIA 驱动 / CuPy CUDA 12: exclusive with CUDA 13; requires an NVIDIA driver
+# cupy-cuda12x[ctk]>=14.2,<15
+# numpy>=2.4,<2.6
+
+# CuPy CUDA 13：与 CUDA 12 变体互斥，还需系统 NVIDIA 驱动 / CuPy CUDA 13: exclusive with CUDA 12; requires an NVIDIA driver
+# cupy-cuda13x[ctk]>=14.2,<15
+# numpy>=2.4,<2.6
+
+# NVIDIA Warp：安装包名为 warp-lang；CPU 可用，CUDA 需匹配驱动和架构 / NVIDIA Warp: package name is warp-lang; CPU works without CUDA, GPU needs compatible driver and architecture
+# warp-lang>=1.17,<1.18
+# numpy>=2.5,<2.6
+
+# Taichi：CPU 已验证，CUDA 与 Vulkan 需在目标设备验证 / Taichi: CPU verified; CUDA and Vulkan need target-device validation
+# taichi==1.7.4
+# numpy>=2.5,<2.6
+
+# PyOpenCL：另需系统 OpenCL ICD 和设备驱动 / PyOpenCL: also requires a system OpenCL ICD and device driver
+# pyopencl==2026.1.4
+# numpy>=2.5,<2.6
+
+# Numba CPU：需匹配 llvmlite / Numba CPU: requires matching llvmlite
+# numba>=0.67,<0.68
+# llvmlite>=0.49,<0.50
+# numpy>=2.5,<2.6
+
+# NumPy CPU：外部解释器中的计算依赖，独立于应用内置 NumPy / NumPy CPU: compute dependency in the external interpreter, separate from the application's bundled NumPy
+# numpy>=2.4,<2.6

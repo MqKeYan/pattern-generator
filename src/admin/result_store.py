@@ -7,6 +7,12 @@ import threading
 import time
 from pathlib import Path
 
+import numpy as np
+
+
+ANIMATION_CHUNK_SIZE = 20
+ANIMATION_FORMAT = 'float32-chunks-v1'
+
 
 class ResultStore:
     """仅在内存保存索引，大型图表和动画数据落到磁盘。"""
@@ -42,18 +48,18 @@ class ResultStore:
             for path in self.cache_dir.glob('*.json'):
                 try:
                     if now - path.stat().st_mtime > self._ttl_seconds():
-                        path.unlink(missing_ok=True)
+                        self._discard_file(path)
                         continue
                     envelope = self._read_file(path)
                     client_id = envelope['client_id']
                     cache_type = envelope['cache_type']
                     item = {'task_id': path.stem, 'path': path,
-                            'updated_at': path.stat().st_mtime, 'size': path.stat().st_size}
+                            'updated_at': path.stat().st_mtime, 'size': self._storage_size(path)}
                     current = self._index.setdefault(client_id, {}).get(cache_type)
                     if current is None or item['updated_at'] > current['updated_at']:
                         self._index[client_id][cache_type] = item
                     elif path.exists():
-                        path.unlink()
+                        self._discard_file(path)
                 except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
                     self._discard_file(path)
         self._enforce_limits()
@@ -70,10 +76,100 @@ class ResultStore:
             raise ValueError('缓存数据无效')
         return data
 
+    def _chunk_path(self, path, index):
+        return path.with_name(f'{path.stem}.{index:04d}.bin')
+
+    def _storage_size(self, path):
+        return path.stat().st_size + sum(
+            chunk.stat().st_size for chunk in path.parent.glob(f'{path.stem}.[0-9][0-9][0-9][0-9].bin')
+        )
+
+    def _put_chunked_animation(self, client_id, task_id, data, update_index=True):
+        """帧按 Float32 分块写入；最后提交小型元数据文件。"""
+        animation = data.get('animation')
+        frames = animation.get('frames') if isinstance(animation, dict) else None
+        if not isinstance(frames, list) or not frames:
+            return False
+        path = self.cache_dir / f'{task_id}.json'
+        temp_path = path.with_suffix('.json.tmp')
+        written_chunks = []
+        try:
+            height = len(frames[0]['x_data'])
+            width = len(frames[0]['x_data'][0])
+            if not height or not width or len(frames) != animation.get('total_frames'):
+                raise ValueError('动画帧结构无效')
+            bytes_per_frame = height * width * 2 * 4
+            chunk_size = min(ANIMATION_CHUNK_SIZE, self._max_file_bytes() // bytes_per_frame)
+            if chunk_size < 1:
+                raise ValueError('单帧超过缓存文件大小限制')
+            metadata = {key: value for key, value in animation.items() if key != 'frames'}
+            metadata.update({
+                'format': ANIMATION_FORMAT, 'cache_id': task_id,
+                'shape': [height, width], 'chunk_size': chunk_size,
+                'chunk_count': (len(frames) + chunk_size - 1) // chunk_size,
+            })
+            envelope = {
+                'client_id': client_id, 'cache_type': 'animation', 'saved_at': time.time(),
+                'data': {**data, 'animation': metadata},
+            }
+            encoded = json.dumps(envelope, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+            if len(encoded) > self._max_file_bytes():
+                return False
+            with self._lock:
+                self.cache_dir.mkdir(parents=True, exist_ok=True)
+                for index, start in enumerate(range(0, len(frames), chunk_size)):
+                    group = frames[start:start + chunk_size]
+                    values = np.asarray(
+                        [[frame['x_data'], frame['y_data']] for frame in group], dtype='<f4'
+                    )
+                    if values.shape != (len(group), 2, height, width):
+                        raise ValueError('动画帧尺寸不一致')
+                    chunk_path = self._chunk_path(path, index)
+                    chunk_temp = chunk_path.with_suffix('.bin.tmp')
+                    with open(chunk_temp, 'wb') as handle:
+                        handle.write(values.tobytes(order='C'))
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    os.replace(chunk_temp, chunk_path)
+                    written_chunks.append(chunk_path)
+                with open(temp_path, 'wb') as handle:
+                    handle.write(encoded)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(temp_path, path)
+                if update_index:
+                    self._index.setdefault(client_id, {})['animation'] = {
+                        'task_id': task_id, 'path': path,
+                        'updated_at': time.time(), 'size': self._storage_size(path),
+                    }
+                else:
+                    current = self._index.get(client_id, {}).get('animation')
+                    if current and current['path'] == path:
+                        current['size'] = self._storage_size(path)
+                self._enforce_limits()
+            return path.is_file()
+        except (OSError, TypeError, ValueError, KeyError) as exc:
+            self._discard_file(temp_path)
+            for chunk in written_chunks:
+                self._discard_file(chunk)
+            if self.log:
+                self.log.error_event('cache_result_write_failed', detail={'error': exc})
+            return False
+
+    def _prepare_animation(self, path, envelope):
+        animation = envelope['data'].get('animation')
+        if (envelope['cache_type'] == 'animation' and isinstance(animation, dict)
+                and isinstance(animation.get('frames'), list)):
+            if self._put_chunked_animation(envelope['client_id'], path.stem, envelope['data'], False):
+                return self._read_file(path)
+        return envelope
+
     def put(self, client_id, task_id, cache_type, data):
         """原子写入一份结果，并更新客户端最新结果索引。"""
         if not client_id or cache_type not in ('simulation', 'animation') or not isinstance(data, dict):
             return False
+        if cache_type == 'animation':
+            return self._put_chunked_animation(client_id, task_id, data)
         path = self.cache_dir / f'{task_id}.json'
         envelope = {
             'client_id': client_id,
@@ -105,7 +201,7 @@ class ResultStore:
                 self.log.error_event('cache_result_write_failed', detail={'error': exc})
             return False
 
-    def get(self, client_id, include_animation=True):
+    def get(self, client_id, include_animation=True, include_simulation=True):
         """读取客户端最新结果；损坏项只删除自身。"""
         if not client_id:
             return None
@@ -116,8 +212,10 @@ class ResultStore:
         for cache_type, item in entries.items():
             if cache_type == 'animation' and not include_animation:
                 continue
+            if cache_type == 'simulation' and not include_simulation:
+                continue
             try:
-                envelope = self._read_file(item['path'])
+                envelope = self._prepare_animation(item['path'], self._read_file(item['path']))
                 result['anim' if cache_type == 'animation' else 'type'] = (
                     envelope['data'] if cache_type == 'animation' else envelope['data'].get('type', 'simulation'))
                 if cache_type == 'simulation':
@@ -137,9 +235,31 @@ class ResultStore:
             envelope = self._read_file(path)
             if envelope['client_id'] != client_id:
                 return None
-            return envelope['data']
+            return self._prepare_animation(path, envelope)['data']
         except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
             self._discard_file(path)
+            return None
+
+    def get_animation_chunk(self, client_id, task_id, index):
+        """只返回已认证客户端所属缓存的一块原始 Float32 帧。"""
+        if (not client_id or not task_id or Path(task_id).name != task_id
+                or '.' in task_id or not 0 <= index < 1000):
+            return None
+        path = self.cache_dir / f'{task_id}.json'
+        try:
+            envelope = self._read_file(path)
+            animation = envelope['data'].get('animation', {})
+            if (envelope['client_id'] != client_id or envelope['cache_type'] != 'animation'
+                    or animation.get('format') != ANIMATION_FORMAT
+                    or index >= animation['chunk_count']):
+                return None
+            frame_count = min(animation['chunk_size'], animation['total_frames'] - index * animation['chunk_size'])
+            height, width = animation['shape']
+            chunk_path = self._chunk_path(path, index)
+            if chunk_path.stat().st_size != frame_count * 2 * height * width * 4:
+                return None
+            return chunk_path.read_bytes()
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
             return None
 
     def remove_client(self, client_id):
@@ -152,7 +272,8 @@ class ResultStore:
 
     def clear(self):
         with self._lock:
-            paths = list(self.cache_dir.glob('*.json')) + list(self.cache_dir.glob('*.tmp'))
+            paths = (list(self.cache_dir.glob('*.json')) + list(self.cache_dir.glob('*.bin'))
+                     + list(self.cache_dir.glob('*.tmp')))
             self._index.clear()
             for path in paths:
                 self._discard_file(path)
@@ -167,10 +288,19 @@ class ResultStore:
                         path.unlink(missing_ok=True)
                 except OSError:
                     pass
+            for path in list(self.cache_dir.glob('*.bin')):
+                if not (self.cache_dir / f'{path.name.rsplit(".", 2)[0]}.json').exists():
+                    self._discard_file(path)
+            for path in list(self.cache_dir.glob('*.json')):
+                try:
+                    if now - path.stat().st_mtime > self._ttl_seconds():
+                        self._discard_file(path)
+                except OSError:
+                    pass
             for client_id, entries in list(self._index.items()):
                 for cache_type, item in list(entries.items()):
                     try:
-                        if now - item['updated_at'] > self._ttl_seconds():
+                        if not item['path'].exists() or now - item['updated_at'] > self._ttl_seconds():
                             self._discard_file(item['path'])
                             entries.pop(cache_type, None)
                     except OSError:
@@ -185,7 +315,7 @@ class ResultStore:
             total = 0
             for path in self.cache_dir.glob('*.json'):
                 try:
-                    size = path.stat().st_size
+                    size = self._storage_size(path)
                 except OSError:
                     continue
                 files.append((path.stat().st_mtime, path, size))
@@ -205,7 +335,11 @@ class ResultStore:
 
     def _discard_file(self, path):
         try:
-            Path(path).unlink(missing_ok=True)
+            path = Path(path)
+            if path.suffix == '.json':
+                for chunk in path.parent.glob(f'{path.stem}.[0-9][0-9][0-9][0-9].bin'):
+                    chunk.unlink(missing_ok=True)
+            path.unlink(missing_ok=True)
         except OSError:
             pass
 

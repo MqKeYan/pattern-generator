@@ -8,6 +8,13 @@ const state = {
     initRanges: {},        // 初始值范围
     trackPoints: [],       // 跟踪点列表
     animationData: null,  // 动画数据
+    animationChunks: new Map(), // 一次性载入的全部 Float32 动画块
+    animationChunkRequests: new Map(), // 正在读取的动画块
+    animationLoadPromise: null, // 首次完整读取动画块
+    animPlotPromise: null, // 避免低性能设备上多帧 Plotly 绘制重叠
+    animRenderedFor: null, // 当前图表对应的动画数据
+    animRenderToken: 0,
+    animPlaybackToken: 0,
     animTimer: null,       // 动画计时器
     animFrame: 0,         // 当前动画帧
     animPlaying: false,   // 动画播放状态
@@ -447,10 +454,51 @@ async function runSimulation() {
  * 初始化应用
  * 加载配置、恢复设置、初始化UI
  */
+function renderServiceInfo(info, version, clientId) {
+    const infoRows = [
+        ['info_version', version],
+        ['info_client_id', clientId],
+        ['info_python', info.python],
+        ['info_pytorch', info.torch],
+        ['info_cuda', info.cuda],
+        ['info_cpu', info.cpu],
+        ['info_gpu', info.gpu],
+        ['info_current_engine', info.engine],
+        ['info_hardware', info.hardware],
+        ['info_max_compute_concurrency', info.max_compute_concurrency],
+    ];
+    $('#info-grid').innerHTML = infoRows.map(([k, v]) =>
+        `<span class="status-k" data-i18n="${k}">${i18n.t(k)}</span><span class="status-v">${Array.isArray(v) ? (v.length ? v.map(esc).join('<br>') : '-') : esc(v ?? '-')}</span>`).join('');
+}
+
+async function refreshServiceInfo() {
+    try {
+        const response = await fetch('/api/compute-engines');
+        if (!response.ok) return;
+        const inventory = await response.json();
+        const selected = inventory.selected || {};
+        const torch = inventory.engines?.find(engine => engine.id === 'pytorch') || {};
+        renderServiceInfo({
+            python: selected.python_version,
+            cuda: selected.cuda,
+            torch: torch.version,
+            engine: selected.engine_name,
+            engine_version: selected.version,
+            cpu: window.INIT_CONFIG?.service_info?.cpu,
+            gpu: inventory.gpu_models,
+            hardware: inventory.hardware,
+            max_compute_concurrency: inventory.max_compute_concurrency,
+        }, window.INIT_CONFIG?.version, state.clientId);
+    } catch (error) {
+        console.warn('计算引擎信息获取失败:', error);
+    }
+}
+
 async function init() {
     state.clientId = getClientToken();
     state.clientSessionId = createClientSessionId();
     state.clientName = localStorage.getItem('client_name') || '';
+    localStorage.removeItem('compute_preference');
     startPresenceSocket();
 
     try {
@@ -463,19 +511,8 @@ async function init() {
         state.paramNames = config.param_names;
 
         // 信息卡片：标签按语言翻译（data-i18n，切换语言时自动更新），数值为动态内容
-        const info = config.service_info || {};
-        const infoRows = [
-            ['info_version', config.version],
-            ['info_client_id', state.clientId],
-            ['info_python', info.python],
-            ['info_cuda', info.cuda],
-            ['info_pytorch', info.torch],
-            ['info_cpu', info.cpu],
-            ['info_gpu', info.gpu],
-            ['info_hardware', info.hardware],
-        ];
-        $('#info-grid').innerHTML = infoRows.map(([k, v]) =>
-            `<span class="status-k" data-i18n="${k}">${i18n.t(k)}</span><span class="status-v" title="${esc(v)}">${esc(v ?? '-')}</span>`).join('');
+        renderServiceInfo(config.service_info || {}, config.version, state.clientId);
+        refreshServiceInfo();
 
         // 构建模型选择器（模型名按语言翻译）
         const select = $('#model-select');
@@ -565,31 +602,36 @@ function restoreTab() {
 }
 
 /**
- * 按需恢复动画缓存，避免二维页面刷新时解析全部动画帧。
+ * 仅在进入动画页时恢复动画缓存，随后一次读完所有帧块。
  */
 async function restoreAnimationCache() {
     if (state.animationData) return;
     if (state.animationRestorePromise) return state.animationRestorePromise;
 
-    state.animationRestorePromise = apiCall('/api/restore', { include_animation: true })
-        .then(resp => {
+    state.animationRestorePromise = apiCall('/api/restore', { include_animation: true, include_simulation: false })
+        .then(async resp => {
             const animation = resp.cached?.anim?.animation;
             if (!animation) return;
 
-            state.animationData = animation;
-            state.animStart = parseInt($('#anim-start').value) || 0;
+            state.animStart = resp.cached.anim.start_iteration ?? (parseInt($('#anim-start').value) || 0);
             state.animFrame = 0;
             state.animPlaying = false;
             $('#anim-slider').max = animation.total_frames - 1;
             $('#anim-slider').value = 0;
-            $('#anim-frame-info').textContent = `帧: 0 / ${animation.total_frames}`;
+            $('#anim-frame-info').textContent = i18n.t('frame_count', { current: 0, total: animation.total_frames });
+
+            await prepareAnimationData(animation);
 
             if ($('.tab-btn.active')?.dataset?.tab === 'tab-anim') {
-                renderAnimFrame(0);
+                await renderAnimFrame(0);
                 renderAnimEvolution();
             }
         })
-        .catch(err => console.error('恢复动画缓存失败:', err))
+        .catch(err => {
+            state.animationData = null;
+            console.error('恢复动画缓存失败:', err);
+            showToast(err.message, 'error');
+        })
         .finally(() => { state.animationRestorePromise = null; });
 
     return state.animationRestorePromise;

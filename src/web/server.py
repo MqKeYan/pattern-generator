@@ -19,9 +19,9 @@ mimetypes.add_type('font/otf', '.otf')
 # 环境变量设置
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
-import torch
+from common.app_context import compute_manager
 from fastapi import BackgroundTasks, FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -30,8 +30,11 @@ if getattr(sys, 'frozen', False):
 else:
     base_path = os.path.dirname(__file__)
 
-from common.app_context import (access, clients, client_cache, init_config, log,
-                                monitor, presence_sockets, release_runtime_memory, settings, task_queue)
+from common.app_context import (access, clients, client_cache, compute_capacity,
+                                compute_hardware_label, gpu_models, init_config,
+                                initialize_compute_capacity, log,
+                                monitor, presence_sockets, release_runtime_memory,
+                                settings, task_queue)
 from admin.tasks import QueueLimitError
 from admin.logger import task_mode_label
 from common.notification_channels import sanitize_channel_targets, sanitize_pushplus_targets, send_channel_notifications
@@ -43,6 +46,7 @@ from common.security import (SessionStore, authenticate_request, authenticate_we
 @asynccontextmanager
 async def lifespan(_app):
     """服务启动时开启任务调度与监控（幂等，后台服务共用同一单例）"""
+    initialize_compute_capacity()
     task_queue.start()
     monitor.start()
     yield
@@ -224,7 +228,7 @@ async def index(request: Request):
     """主页面，同时签发 HttpOnly 浏览器会话。"""
     response = templates.TemplateResponse(
         request=request, name='index.html',
-        context={'init_config': init_config()})
+        context={'init_config': await asyncio.to_thread(init_config)})
     token = sessions.issue(ip=_client_ip(request))
     set_session_cookie(response, token, secure=request.url.scheme == 'https')
     return response
@@ -315,6 +319,18 @@ async def presence(ws: WebSocket):
                 clients.disconnect(client_id, session_id)
 
 
+@app.get('/api/compute-engines')
+async def compute_engines(request: Request):
+    guard = await _guard(request)
+    if guard:
+        return guard
+    status = await asyncio.to_thread(compute_manager.status, public=True)
+    status['max_compute_concurrency'] = compute_capacity()['count']
+    status['hardware'] = compute_hardware_label(status.get('selected'))
+    status['gpu_models'] = await asyncio.to_thread(gpu_models)
+    return status
+
+
 @app.post('/api/simulate')
 async def run_simulation(request: Request):
     """提交模拟任务（异步）"""
@@ -327,7 +343,6 @@ async def run_simulation(request: Request):
         return _error('请求体必须是 JSON')
     if not isinstance(data, dict):
         return _error('请求体必须是 JSON 对象')
-
     try:
         client_id = _client_id(data)
         _client_name(data)
@@ -336,6 +351,8 @@ async def run_simulation(request: Request):
     auth = _authenticate(request, client_id)
     if auth is None:
         return _error('缺少有效会话或访问密钥', 401)
+    if 'engine' in data or 'device' in data:
+        return _error('计算引擎和设备只能在后台设置')
     ip = _client_ip(request)
 
     allowed, reason = access.is_allowed(ip, client_id)
@@ -405,7 +422,11 @@ async def run_simulation(request: Request):
         'track_points': track_points, 'lang': lang, 'client_notifications': client_notifications,
     }
     try:
-        task = task_queue.submit(payload, client_id, owner=auth.subject)
+        task = await asyncio.to_thread(
+            compute_manager.submit_global_task, task_queue, payload, client_id,
+            auth.subject, seed=data.get('seed'))
+    except ValueError as e:
+        return _error(str(e))
     except QueueLimitError as e:
         return _error(str(e), 429)
     log.info_event(
@@ -434,7 +455,6 @@ async def run_animation(request: Request):
         return _error('请求体必须是 JSON')
     if not isinstance(data, dict):
         return _error('请求体必须是 JSON 对象')
-
     try:
         client_id = _client_id(data)
         _client_name(data)
@@ -443,6 +463,8 @@ async def run_animation(request: Request):
     auth = _authenticate(request, client_id)
     if auth is None:
         return _error('缺少有效会话或访问密钥', 401)
+    if 'engine' in data or 'device' in data:
+        return _error('计算引擎和设备只能在后台设置')
     ip = _client_ip(request)
 
     allowed, reason = access.is_allowed(ip, client_id)
@@ -501,7 +523,11 @@ async def run_animation(request: Request):
         'lang': lang, 'client_notifications': client_notifications,
     }
     try:
-        task = task_queue.submit(payload, client_id, owner=auth.subject)
+        task = await asyncio.to_thread(
+            compute_manager.submit_global_task, task_queue, payload, client_id,
+            auth.subject, seed=data.get('seed'))
+    except ValueError as e:
+        return _error(str(e))
     except QueueLimitError as e:
         return _error(str(e), 429)
     log.info_event(
@@ -558,7 +584,7 @@ async def task_status(task_id: str, request: Request, background_tasks: Backgrou
     if snapshot['status'] == 'completed' and not snapshot['delivered']:
         result = task_queue.get(task_id, include_result=True).get('result')
         if result is None:
-            result = client_cache.get_task(snapshot['client_id'], task_id)
+            result = await asyncio.to_thread(client_cache.get_task, snapshot['client_id'], task_id)
         if result is not None:
             # 结果已在任务完成时转存磁盘，首次交付后仅清理任务引用。
             task_queue.mark_delivered(task_id)
@@ -639,9 +665,7 @@ async def cleanup(request: Request):
     try:
         import gc as _gc
         _gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.ipc_collect()
+
     except Exception:
         success = False
     log.info_event(
@@ -667,9 +691,25 @@ async def restore(request: Request):
     if _authenticate(request, client_id) is None:
         return _error('缺少有效会话或访问密钥', 401)
     include_animation = bool(data.get('include_animation', True))
-    cached = client_cache.get(client_id, include_animation=include_animation)
+    include_simulation = bool(data.get('include_simulation', True))
+    cached = await asyncio.to_thread(client_cache.get, client_id, include_animation, include_simulation)
     if cached is not None:
         client = clients.get(client_id)
         log.info_event('cache_restore_complete', client_id=client_id, client_name=client.client_name if client else None)
         return {'success': True, 'cached': cached}
     return {'success': False, 'cached': None}
+
+
+@app.get('/api/animation/chunk/{cache_id}/{chunk_index}')
+async def animation_chunk(cache_id: str, chunk_index: int, request: Request, client_id: str = ''):
+    """按需读取一块动画帧，不经 JSON 序列化。"""
+    try:
+        client_id = _client_id({'client_id': client_id})
+    except ValueError as exc:
+        return _error(str(exc))
+    if _authenticate(request, client_id) is None:
+        return _error('缺少有效会话或访问密钥', 401)
+    data = await asyncio.to_thread(client_cache.get_animation_chunk, client_id, cache_id, chunk_index)
+    if data is None:
+        return _error('动画缓存块不存在', 404)
+    return Response(content=data, media_type='application/octet-stream', headers={'Cache-Control': 'private, no-store'})

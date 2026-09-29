@@ -6,26 +6,113 @@
  */
 function renderAnimationPlot(id, data, layout, config) {
     const chart = document.getElementById(id);
+    const heatmap = data[0]?.type === 'heatmap';
+    const plotConfig = heatmap ? { ...config, doubleClick: false } : config;
     if (chart?._fullLayout) {
-        return Plotly.react(chart, data, layout, config);
+        return Plotly.react(chart, data, layout, plotConfig);
     }
-    return Plotly.newPlot(chart, data, layout, config);
+    const plot = Plotly.newPlot(chart, data, layout, plotConfig);
+    if (heatmap) {
+        Promise.resolve(plot).then(() => bindPatternPointTooltip(chart));
+    }
+    return plot;
 }
 
 function appendPlotEdgeLabels(chartId, title, yLabel, xLabel) {
     const chart = document.getElementById(chartId);
     if (!chart) return;
-    chart.querySelectorAll('.plot-edge-label').forEach(label => label.remove());
     [
         ['title', title],
         ['y-axis', yLabel],
         ['x-axis', xLabel],
     ].forEach(([kind, text]) => {
-        const label = document.createElement('span');
-        label.className = `plot-edge-label plot-edge-label-${kind}`;
+        let label = chart.querySelector(`.plot-edge-label-${kind}`);
+        if (!label) {
+            label = document.createElement('span');
+            label.className = `plot-edge-label plot-edge-label-${kind}`;
+            chart.appendChild(label);
+        }
         label.textContent = text;
-        chart.appendChild(label);
     });
+}
+
+function bindPatternPointTooltip(chart) {
+    let tooltip = document.getElementById('pattern-point-tooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'pattern-point-tooltip';
+        tooltip.className = 'pattern-point-tooltip';
+        tooltip.hidden = true;
+        document.body.appendChild(tooltip);
+    }
+
+    const previous = chart._patternPointHover;
+    if (previous) {
+        chart.removeListener?.('plotly_hover', previous.show);
+        chart.removeListener?.('plotly_unhover', previous.hide);
+        chart.removeEventListener('mousemove', previous.move);
+        chart.removeEventListener('mouseleave', previous.leave);
+    }
+
+    let pointerPosition = null;
+    const move = event => {
+        pointerPosition = event;
+        if (tooltip.dataset.chart !== chart.id) return;
+        tooltip.style.left = `${event.clientX}px`;
+        tooltip.style.top = `${event.clientY}px`;
+    };
+    const hide = () => {
+        if (tooltip.dataset.chart === chart.id) tooltip.hidden = true;
+    };
+    const leave = event => {
+        // Plotly 单击会替换覆盖层，仅在指针真正离开图表时关闭提示。
+        const bounds = chart.getBoundingClientRect();
+        if (event.clientX >= bounds.left && event.clientX <= bounds.right &&
+            event.clientY >= bounds.top && event.clientY <= bounds.bottom) return;
+        hide();
+    };
+    const show = event => {
+        const point = event.points?.[0];
+        if (!point) return;
+        const z = Number(point.z);
+        tooltip.textContent = `x: ${point.x}   y: ${point.y}\nz: ${Number.isFinite(z) ? Number(z.toPrecision(4)) : point.z}`;
+        tooltip.dataset.chart = chart.id;
+        tooltip.hidden = false;
+        const hoverPointer = event.event;
+        if (Number.isFinite(hoverPointer?.clientX) && Number.isFinite(hoverPointer?.clientY)) {
+            move(hoverPointer);
+        } else if (pointerPosition) {
+            move(pointerPosition);
+        }
+    };
+    chart.on('plotly_hover', show);
+    chart.on('plotly_unhover', hide);
+    chart.addEventListener('mousemove', move);
+    chart.addEventListener('mouseleave', leave);
+    chart._patternPointHover = { show, hide, move, leave };
+}
+
+function renderPatternHeatmap(id, data, layout, config) {
+    const plot = Plotly.newPlot(id, data, layout, { ...config, doubleClick: false });
+    Promise.resolve(plot).then(() => bindPatternPointTooltip(document.getElementById(id)));
+    return plot;
+}
+
+function patternHeatmapLayout(colors) {
+    return {
+        title: { text: '' },
+        dragmode: false,
+        paper_bgcolor: 'rgba(0, 0, 0, 0)',
+        plot_bgcolor: 'rgba(0, 0, 0, 0)',
+        font: { color: colors.secondary, size: PLOT_FONT_SIZES.base },
+        margin: { l: 50, r: 50, t: 50, b: 70 },
+        xaxis: { title: '', range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], scaleanchor: 'y', constrain: 'domain' },
+        yaxis: { title: '', range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], constrain: 'domain' },
+    };
+}
+
+function evolutionPlotMargin() {
+    return { l: 96, r: 112, t: 48, b: 48 };
 }
 
 // 二维斑图渲染
@@ -36,56 +123,39 @@ function appendPlotEdgeLabels(chartId, title, yLabel, xLabel) {
  */
 function render2DPatterns(vizData) {
     const colors = getPlotTheme();
-    const evolutionInset = 48;
     const xPop = vizData['2d_patterns'].x_population;
     const yPop = vizData['2d_patterns'].y_population;
     const combined = vizData.combined_pattern;
     const evolution = vizData.evolution_curves;
 
     // X种群热力图
-    Plotly.newPlot('chart-x-pop', [{
+    renderPatternHeatmap('chart-x-pop', [{
         z: xPop.data,
         type: 'heatmap',
         colorscale: 'Viridis',
-        hoverinfo: 'skip',
+        hoverinfo: 'none',
         colorbar: { title: i18n.t('density'), len: 0.8, tickformat: '.4g' },
-    }], {
-        title: { text: '' },
-        paper_bgcolor: 'rgba(0, 0, 0, 0)',
-        plot_bgcolor: 'rgba(0, 0, 0, 0)',
-        font: { color: colors.secondary, size: PLOT_FONT_SIZES.base },
-        margin: { l: 50, r: 50, t: 50, b: 70 },
-        xaxis: { title: '', range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], scaleanchor: 'y', constrain: 'domain' },
-        yaxis: { title: '', range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], constrain: 'domain' },
-    }, { responsive: true, displayModeBar: false });
+    }], patternHeatmapLayout(colors), { responsive: true, displayModeBar: false });
     appendPlotEdgeLabels('chart-x-pop', xPop.title, i18n.t('axis_y'), i18n.t('axis_x'));
 
     // Y种群热力图
-    Plotly.newPlot('chart-y-pop', [{
+    renderPatternHeatmap('chart-y-pop', [{
         z: yPop.data,
         type: 'heatmap',
         colorscale: 'Plasma',
-        hoverinfo: 'skip',
+        hoverinfo: 'none',
         colorbar: { title: i18n.t('density'), len: 0.8, tickformat: '.4g' },
-    }], {
-        title: { text: '' },
-        paper_bgcolor: 'rgba(0, 0, 0, 0)',
-        plot_bgcolor: 'rgba(0, 0, 0, 0)',
-        font: { color: colors.secondary, size: PLOT_FONT_SIZES.base },
-        margin: { l: 50, r: 50, t: 50, b: 70 },
-        xaxis: { title: '', range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], scaleanchor: 'y', constrain: 'domain' },
-        yaxis: { title: '', range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], constrain: 'domain' },
-    }, { responsive: true, displayModeBar: false });
+    }], patternHeatmapLayout(colors), { responsive: true, displayModeBar: false });
     appendPlotEdgeLabels('chart-y-pop', yPop.title, i18n.t('axis_y'), i18n.t('axis_x'));
 
     // 合并斑图
     const xNorm = combined.x_normalized;
     const yNorm = combined.y_normalized;
 
-    Plotly.newPlot('chart-combined', [{
+    renderPatternHeatmap('chart-combined', [{
         z: xNorm.map((row, i) => row.map((v, j) => v + yNorm[i][j])),
         type: 'heatmap',
-        hoverinfo: 'skip',
+        hoverinfo: 'none',
         colorscale: [
             [0, 'rgb(0,30,0)'],
             [0.25, 'rgb(180,0,0)'],
@@ -94,15 +164,7 @@ function render2DPatterns(vizData) {
             [1, 'rgb(0,200,200)'],
         ],
         colorbar: { title: i18n.t('density'), len: 0.8, tickformat: '.4g' },
-    }], {
-        title: { text: '' },
-        paper_bgcolor: 'rgba(0, 0, 0, 0)',
-        plot_bgcolor: 'rgba(0, 0, 0, 0)',
-        font: { color: colors.secondary, size: PLOT_FONT_SIZES.base },
-        margin: { l: 50, r: 50, t: 50, b: 70 },
-        xaxis: { title: '', range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], scaleanchor: 'y', constrain: 'domain' },
-        yaxis: { title: '', range: [0, 100], tickmode: 'array', tickvals: [0, 20, 40, 60, 80, 100], constrain: 'domain' },
-    }, { responsive: true, displayModeBar: false });
+    }], patternHeatmapLayout(colors), { responsive: true, displayModeBar: false });
     appendPlotEdgeLabels('chart-combined', combined.title, i18n.t('axis_y'), i18n.t('axis_x'));
 
     // 跟踪点标记（在合并图上）
@@ -139,7 +201,7 @@ function render2DPatterns(vizData) {
         paper_bgcolor: 'rgba(0, 0, 0, 0)',
         plot_bgcolor: 'rgba(0, 0, 0, 0)',
         font: { color: colors.secondary, size: PLOT_FONT_SIZES.base },
-        margin: { l: 96, r: 112, t: evolutionInset, b: evolutionInset },
+        margin: evolutionPlotMargin(),
         dragmode: 'pan',
         yaxis: { title: '', gridcolor: colors.grid, zeroline: false, fixedrange: true },
         legend: {
@@ -374,6 +436,7 @@ function render3DPattern(vizData) {
     const surfaceTrace = {
         z: zScaled,
         type: 'surface',
+        hoverinfo: 'none',
         colorscale: 'Viridis',
         colorbar: {
             title: { text: i18n.t('density'), font: { size: PLOT_FONT_SIZES.axisTitle, color: colors.secondary } },
@@ -457,6 +520,7 @@ function render3DPattern(vizData) {
     const plotPromise = Plotly.newPlot(chart, trace, layout, config);
     Promise.resolve(plotPromise).then(() => {
         if (renderToken !== state.render3dToken) return;
+        bindPatternPointTooltip(chart);
         // Plotly绘制完成后相机仍可能处于平滑过渡，必须先固定内部矩阵
         settle3DCamera(chart);
         chart.style.visibility = 'visible';

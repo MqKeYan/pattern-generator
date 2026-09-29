@@ -35,9 +35,15 @@ function switchTab(tabId, { replace = false } = {}) {
         render2DPatterns(state.lastViz2d);
     }
 
-    // 动画缓存按需加载，避免初始恢复阻塞二维页面
-    if (tabId === 'tab-anim' && !state.animationData) {
-        restoreAnimationCache();
+    // 仅在进入动画页时载入缓存；若载入时切走，返回后补画首帧。
+    if (tabId === 'tab-anim') {
+        if (!state.animationData) {
+            restoreAnimationCache();
+        } else if (!state.animationRestorePromise && !state.animationLoadPromise
+                && !state.animPlotPromise && state.animRenderedFor !== state.animationData) {
+            renderAnimFrame(0).then(() => renderAnimEvolution())
+                .catch(err => showToast(err.message, 'error'));
+        }
     }
 
     // 切换后触发所有图表resize（三维图除外：WebGL自动适配，resize反而引起画布重建闪烁）
@@ -55,8 +61,7 @@ function syncAnimationLayout() {
     const panel = document.getElementById('tab-anim');
     if (!panel || !panel.classList.contains('active')) return;
     if (window.matchMedia('(max-width: 900px)').matches) {
-        panel.style.removeProperty('--two-d-row-height');
-        panel.style.removeProperty('--animation-evolution-track');
+        panel.style.removeProperty('--animation-pattern-height');
         return;
     }
     // 读取二维页外层网格实际解析后的行间距，不能直接 parseFloat(clamp(...))。
@@ -65,19 +70,9 @@ function syncAnimationLayout() {
     const panelStyle = getComputedStyle(panel);
     const panelHeight = panel.getBoundingClientRect().height;
     const paddingHeight = parseFloat(panelStyle.paddingTop) + parseFloat(panelStyle.paddingBottom);
-    const control = panel.querySelector('.anim-control-bar');
-    const evolution = panel.querySelector('.chart-full');
-    if (!control || !evolution) return;
-    const controlStyle = getComputedStyle(control);
-    const controlOuterHeight = control.getBoundingClientRect().height + (parseFloat(controlStyle.marginBottom) || 0);
-    const evolutionMargin = parseFloat(getComputedStyle(evolution).marginTop || '0') || 0;
     const targetHeight = (panelHeight - paddingHeight - twoDGap) / 2;
-    const evolutionTrack = targetHeight + evolutionMargin;
-    const patternHeight = panelHeight - paddingHeight - controlOuterHeight - evolutionTrack;
-    if (!Number.isFinite(targetHeight) || targetHeight <= 0 || !Number.isFinite(patternHeight) || patternHeight <= 0) return;
-    panel.style.setProperty('--two-d-row-height', `${targetHeight}px`);
-    panel.style.setProperty('--animation-pattern-height', `${patternHeight}px`);
-    panel.style.setProperty('--animation-evolution-track', `${evolutionTrack}px`);
+    if (!Number.isFinite(targetHeight) || targetHeight <= 0) return;
+    panel.style.setProperty('--animation-pattern-height', `${targetHeight}px`);
 }
 
 window.addEventListener('resize', () => requestAnimationFrame(syncAnimationLayout));
@@ -620,8 +615,9 @@ function bindEvents() {
     $('#anim-slider').addEventListener('input', () => {
         const frame = parseInt($('#anim-slider').value);
         if (state.animationData) {
+            if (state.animPlaying) pauseAnimation();
             state.animFrame = frame;
-            renderAnimFrame(frame);
+            renderAnimFrame(frame).catch(err => showToast(err.message, 'error'));
         }
     });
 
