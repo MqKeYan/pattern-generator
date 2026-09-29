@@ -6,10 +6,9 @@
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white"></a>
-  <a href="#"><img src="https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white"></a>
-  <a href="#"><img src="https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Plotly.js-2.32+-3F4F75?logo=plotly&logoColor=white"></a>
+  <a href="#"><img src="https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&logoColor=white"></a>
+  <a href="#"><img src="https://img.shields.io/badge/计算引擎-7%20种-EE4C2C"></a>
+  <a href="#"><img src="https://img.shields.io/badge/界面-FastAPI%20%2B%20Plotly.js-009688"></a>
 </p>
 
 <p align="center">
@@ -27,19 +26,19 @@
 
 ## 简介
 
-斑图生成器是一款基于反应扩散方程的可视化工具，用于模拟并观察生态系统中捕食者-猎物种群的时空动态。软件内置 5 种经典反应扩散模型，借助 PyTorch CUDA 实现 GPU 加速，可快速生成螺旋波、斑点、条纹等典型斑图；提供二维热力图、三维表面图与时间演化曲线等多种可视化形式，并支持逐帧播放斑图演化动画。
+斑图生成器 v2.0.0 是基于反应扩散方程的可视化工具，用于模拟并观察捕食者—猎物及竞争种群的时空动态。软件内置 5 种模型，支持 PyTorch、CuPy、NVIDIA Warp、Taichi、PyOpenCL、Numba、NumPy 共 7 种计算引擎；可生成螺旋波、斑点、条纹等斑图，并展示二维热力图、三维表面图、时间演化曲线和逐帧动画。主界面供浏览器访问，后台负责统一选择计算环境、管理客户端与任务、监控资源和导出报表。
 
 ## 功能概览
 
 ### 前台可视化
 | 功能 | 说明 |
 |------|------|
-| GPU 加速 | PyTorch CUDA 后端，自动检测 CUDA / CPU，支持多 GPU 空闲显存调度 |
+| 计算引擎 | PyTorch、CuPy、NVIDIA Warp、Taichi、PyOpenCL、Numba、NumPy；由后台统一选择，全体客户端使用同一个引擎 |
 | 多维可视化 | Plotly.js 二维热力图 / 三维表面图 / 时间演化曲线 |
-| 动画演化 | 逐帧播放斑图演化过程，支持暂停、调速、帧跳转，帧历史常驻主机内存 |
+| 动画演化 | 逐帧播放斑图演化过程，支持暂停、调速、帧跳转；结果在服务端按块缓存，进入动画页时浏览器读取帧块 |
 | 参数调优 | 7-8 个参数自由调节，实时切换模型，一键重置默认值，支持单参数重置 |
 | 自定义跟踪点 | 在网格任意位置（0-99）设置最多 8 个观察点，追踪种群密度随时间变化 |
-| 内存管理 | 模拟完成后自动清理 GPU 显存与主机缓存，防止内存泄漏 |
+| 结果缓存 | 模拟结果写入磁盘缓存，按保留时间和容量清理；刷新页面可恢复当前客户端的缓存结果 |
 
 ### 任务与调度
 | 功能 | 说明 |
@@ -48,24 +47,25 @@
 | 超时与重试 | 任务超时（默认 300s）自动取消，失败自动重试（默认 1 次），重试耗尽进入死信队列 |
 | 显存预检 | 任务分发前按空闲显存 + 预留阈值选择 GPU，不足则继续排队 |
 | 缓存恢复 | 刷新页面自动恢复参数与图表数据，支持二维/动画按需恢复 |
+| 自动并发 | 每次启动根据当前引擎使用的物理 CPU 插槽数或可独立寻址的 GPU 数量确定任务并发上限；不同任务可分配至不同 GPU，单个任务不跨卡加速 |
 
 ### 后台管理中心（`http://127.0.0.1:5001` 仅本机）
 
 | 模块 | 说明 |
 |------|------|
 | 概览 | 全局状态、累计统计、快捷操作、报表导出入口 |
-| 实时监控 | CPU/内存/GPU 利用率/显存/温度/功耗/磁盘/网络实时曲线（3 分钟滚动）与峰值汇总 |
+| 实时监控 | CPU/内存/GPU 利用率、显存、可获取的温度与功耗、磁盘和网络曲线及峰值汇总；默认显示 3 分钟窗口 |
 | 任务队列 | 运行中/等待中/历史/死信队列管理，支持取消、重试、清空、删除 |
 | 客户端管理 | 在线/离线/暂停/排队/计算状态追踪；暂停、踢出（同时封禁 IP）、缓存清理、备注标签 |
 | 访问控制 | IP / client_id 黑白名单、局域网限制、IP+client_id 限流、拒绝记录 |
-| 告警通知 | Windows 弹窗、系统提示音、PushPlus 微信推送，可配置阈值与事件 |
+| 告警通知 | Windows 弹窗、系统提示音、PushPlus、Webhook、SMTP、Telegram、Discord、钉钉、飞书、企业微信，可配置阈值与事件 |
 | 日志 | 每次运行独立落盘 `log/YYYY-MM-DD_HH-mm-ss_PID.log`，支持实时查看、过滤、搜索与下载 |
-| 系统设置 | 端口、并发、超时、限流、缓存上限等运行时设置，支持恢复默认 |
+| 系统设置 | 全局 Python/计算引擎/设备、服务端口、监控视图、超时、限流、缓存上限等设置，支持按功能恢复默认；并发上限只显示，不提供手动编辑 |
 
 ### 运维与报表
 | 功能 | 说明 |
 |------|------|
-| WebSocket 实时推送 | 监控指标、客户端、任务、日志每秒推送，断线 3 秒重连 |
+| WebSocket 实时推送 | 后台监控、客户端、任务与日志实时更新，连接中断后尝试重连 |
 | 在线状态 | 前台 WebSocket 在线连接（`/api/presence`），断开即离线；5 分钟超时兜底 |
 | 报表导出 | 客户端活动 / 任务执行 / 系统资源峰值 / 访问控制 / 告警事件，支持 CSV/XLSX/JSON |
 | 端口检测 | 启动时检测主服务与后台端口占用，支持交互清理与 3 秒倒计时自动启动 |
@@ -87,7 +87,7 @@
 | 操作系统 | Windows 10 版本 1809 及以上 / Windows 11 |
 | 架构 | 64 位（x64） |
 | 内存 | 建议 8GB 及以上 |
-| GPU（可选） | NVIDIA GPU + CUDA 12.x+，显存 4GB+（无 GPU 自动降级 CPU） |
+| GPU（可选） | 按所选引擎准备相应 GPU、驱动和运行环境；CPU 引擎无需 GPU，显式选择不可用的引擎或设备会提示错误 |
 | 浏览器 | Edge / Chrome / Firefox（访问 Web 界面） |
 | 网络 | 后台管理中心仅本机 `127.0.0.1:5001`，主界面支持局域网 `0.0.0.0:5000` |
 
@@ -98,32 +98,55 @@
 1. 从 [Releases](../../releases) 页面下载最新版 `.zip` 压缩包
 2. 解压到任意目录（**不要放在需要管理员权限的目录**，如 `C:\Program Files`）
 3. 注意解压后的 `pattern-generator.exe` 需要和 `_internal/` 文件夹在同一目录
-4. 额外安装 `Pytorch` 依赖，支持 `CUDA 13.2+` 版本的下载指令为 `pip3 install torch --index-url https://download.pytorch.org/whl/cu132`，或者前往[官网](https://pytorch.org/get-started/locally/)
-5. 双击运行 `pattern-generator.exe`，按提示完成端口检测与浏览器自动打开设置
+4. 安装 64 位系统 Python 3.13 或更新版本，并在该解释器中按需安装计算引擎，见 [计算依赖说明](docs/compute-engines.md)。发行包不会打包第三方计算引擎运行库；应用自带的 NumPy 只供结果处理和可视化，不代表外部 Python 中的 NumPy 计算引擎可用。高于 3.13 的 Python 仍需确认目标引擎依赖可以安装并通过实际运算检测。
+5. 双击运行 `pattern-generator.exe`，按提示完成端口检测与浏览器自动打开设置；命令行依次显示独立的“Python 环境”和“计算引擎”页面。每页均可回车立即继续，或等待 3 秒自动继续；倒计时内按 `n` 可进入选择界面
 6. 主界面：`http://局域网IP:5000`，后台：`http://127.0.0.1:5001`（仅本机）
 
 
 ### 从源码运行
 
-```bash
-# 环境要求：Python 3.13+
+```powershell
+# 环境要求：64 位系统 Python 3.13 或更新版本；替换成自己的 python.exe 绝对路径
+$projectPython = 'C:\完整路径\python.exe'
 git clone https://github.com/MqKeYan/pattern-generator.git
 cd pattern-generator
-pip install -r requirements.txt
+& $projectPython -m pip install -r requirements.txt
 
-# GPU 加速（可选）
-# 查看 CUDA 版本信息
-nvidia-smi
-# 下载对应 CUDA 版本的 Pytorch
-pip install torch --index-url https://download.pytorch.org/whl/cu132
+# 可选：按 requirements.txt 的注释清单选择外部计算引擎，手动安装；以下为 PyTorch CPU 示例
+& $projectPython -m pip install "numpy>=2.4,<2.6" "torch==2.14.0+cpu" --extra-index-url https://download.pytorch.org/whl/cpu
 
 # 启动服务（同时启动主服务与后台）
-python run.py
+& $projectPython run.py
 ```
 
-启动后浏览器访问 主界面 http://localhost:5000，后台 http://127.0.0.1:5001。
+启动后按控制台公布的网址访问主界面（局域网 IP），后台为 http://127.0.0.1:5001。
 
-> 开发者提示：`run.py` 会同时启动两个 Uvicorn 服务；后台修改 `config/settings.json` 后需重启生效。
+> `run.py` 同时启动两个 Uvicorn 服务。计算引擎默认设置影响新提交的任务，已提交任务保持原配置；端口等启动项仍需重启生效。
+
+首次启动时，“Python 环境”页按 `n` 可扫描候选解释器，按数字序号选择路径，末项支持手动输入绝对路径；回车或等待 3 秒使用自动默认。后续启动该页只验证当前 Python，按 `n` 才重新扫描。随后“计算引擎”页首次同步搜索七种引擎；之后只验证上次使用的引擎，失效时才全面重扫。该页倒计时内按 `n` 可查看可用引擎并按数字序号选择，直接回车或等待 3 秒继续。后台“系统设置”也能修改全局引擎、设备、Python 路径并手动全面刷新；网页客户端只能查看当前选择。
+
+自动模式在只有一个可用引擎时选用它；多个引擎可用且包含 PyTorch 时优先 PyTorch，其余依次为 CuPy、NVIDIA Warp、Taichi、PyOpenCL、Numba、NumPy。用户手动选定的引擎或 Python 路径如果失效，设置会保留并显示错误，不会悄悄改选。切换全局计算设置及全面刷新时，需先等待已提交任务结束。Numba 目前是 CPU 后端；GPU 能力取决于具体引擎、设备与驱动，当前项目的 GPU 实测仍需在目标硬件上完成。
+
+逐批验收见[第一批](docs/compute-batch-1-review.md)、[第二批](docs/compute-batch-2-review.md)、[第三批](docs/compute-batch-3-review.md)和[第四批](docs/compute-batch-4-review.md)记录。第四批已完成当前电脑上的发行包与 CPU 验证；GPU 实测留待换机。
+
+### 配置文件与数据位置
+
+服务端配置保存在软件运行目录（发行包中为 `pattern-generator.exe` 所在目录，源码运行时为项目根目录）的 `config/`。首次运行会自动创建缺少的功能文件；每次启动读取时会按当前版本补齐新增字段、替换无效值并移除已废弃的功能字段，同时保留已有的有效用户设置。无法归类的旧版扩展字段会转存至 `misc.json`。读取优先级为功能文件中的有效值、旧版配置迁移值、内置默认值。JSON 标准不支持 `//` 注释，因此各现用文件由软件自动加入 `_说明` 字段，保持标准 JSON 可解析。说明语言取操作系统界面语言，支持简体中文、繁体中文、英语、日语和韩语，其他语言回退英语；首次生成文件时即写入，后续每次启动只轻量检查一次，缺失或不完整时才补齐。状态及统计文件只补说明，不重置其业务数据；仅在实际使用时创建的状态文件不会因说明检查而提前生成。通过后台或命令行保存设置时，软件只更新对应功能文件；手动编辑 JSON 请在软件退出后进行。
+
+| 文件 | 用途 |
+|------|------|
+| `config/startup.json` | 主界面和后台端口、启动时自动打开浏览器 |
+| `config/compute.json` | 全局计算引擎、设备、外部 Python 选择 |
+| `config/monitor.json` | 监控默认视图和采样时间窗 |
+| `config/tasks.json` | 任务超时、重试、队列/结果缓存限制、显存预留；最大并发数由启动时识别，不在此手动设置 |
+| `config/access.json` | 允许的主机、请求限流、客户端与连接数限制 |
+| `config/notifications.json` | 后台告警渠道、凭据、事件与阈值 |
+| `config/blacklist.json`、`config/whitelist.json` | 访问控制黑白名单 |
+| `config/compute-engine-state.json`、`config/compute-python-state.json` | 上次启动使用的引擎/Python 状态；按需创建，不覆盖手动选择 |
+| `config/stats.json` | 客户端统计与资源峰值，属于运行数据，不建议手动编辑 |
+| `config/instance.lock` | 运行时单实例锁，正常退出后移除 |
+
+旧版单文件 `settings.json` 仍可在首次读取时自动迁移，迁移完成才保存为 `settings.legacy*.json` 备份；这些备份不参与正常配置读取，可在核对新文件后清理。若旧版有额外字段，软件可能生成 `config/misc.json` 予以保留；无效的 JSON 可能留下 `.bad-...` 副本。**浏览器的语言、模型参数和个人通知偏好保存在各客户端浏览器本地，不属于服务端 `config/`。**日志在 `log/`，结果与计算编译缓存是可清理的运行数据。更完整的迁移规则见[配置文件说明](docs/config-files.md)。
 
 ## 使用流程
 
@@ -146,53 +169,54 @@ python run.py
 - **任务队列**：运行中/等待中/历史/死信四表，支持按任务 ID 操作，显示 GPU 分配与重试次数。
 - **客户端管理**：展示 UUID、名称、IP、状态、当前任务、请求与成功/失败/取消统计、在线时长、标签备注；支持暂停/恢复、踢出封禁、清缓存、备注。
 - **访问控制**：黑白名单按 IP 与 client_id 维护，支持局域网私有网段限制与限流配置。
-- **告警通知**：可配置 `system_toast` / `system_sound` / `pushplus`，阈值如队列积压、GPU 温度。
+- **告警通知**：可配置 `system_toast` / `system_sound` / `pushplus` 及 Webhook、SMTP、Telegram、Discord、钉钉、飞书、企业微信渠道，阈值如队列积压、GPU 温度。
 - **日志**：实时流与历史文件下载，支持级别与关键词过滤。
-- **系统设置**：端口、并发、超时、重试、限流、显存预留、结果保留时长、缓存上限、通知等。
+- **系统设置**：端口、超时、重试、限流、显存预留、结果保留时长、缓存上限、通知等。最大并发计算数量每次启动按所选引擎使用的物理 CPU 或可并行 GPU 数量识别，显示在主界面和后台左上角信息卡片；多块 GPU 可同时处理不同客户端的任务，单个任务不跨卡加速。
 
 ## 项目结构
 
 ```
-src/                                 # 软件代码
-├── core/                            # 核心计算引擎
-│   ├── config.py                    # 模型参数配置
-│   ├── models.py                    # 5 种反应扩散方程 + 拉普拉斯算子
-│   ├── simulation.py                # 模拟引擎 — 网格初始化、迭代、内存管理
-│   └── visualization.py             # 可视化数据生成 — Plotly JSON 格式
-├── admin/                           # 后台管理中心
-│   ├── server.py                    # 后台 FastAPI 服务
-│   ├── clients.py                   # 客户端状态与统计
-│   ├── tasks.py                     # 异步任务队列与调度
-│   ├── monitor.py                   # 系统资源监控
-│   ├── access_control.py            # 访问控制
-│   ├── notifications.py             # 告警通知
-│   ├── result_store.py              # 磁盘结果缓存与生命周期清理
-│   ├── reports.py                   # 报表导出
-│   ├── logger.py                    # 日志系统
-│   ├── websocket.py                 # WebSocket 推送
-│   ├── static/                      # 后台静态资源
-│   └── templates/admin.html         # 后台页面
-├── web/                             # Web 服务层
-│   ├── server.py                    # 主界面 FastAPI 服务 — API + 页面路由
-│   ├── static/
-│   │   ├── css/style.css            # 深色科技风主题样式
-│   │   ├── fonts/NotoSansCJK-VF.otf.ttc # 思源黑体可变字体
-│   │   ├── js/app.js                # 前端逻辑 — Plotly.js 图表渲染
-│   │   ├── js/i18n.js               # 国际化翻译模块
-│   │   ├── js/plotly.min.js         # 本地 Plotly.js 库
-│   │   └── favicon.ico              # 网站图标
-│   └── templates/
-│       └── index.html               # 主页面
-├── common/                          # 通用模块
-│   ├── app_context.py               # 共享运行时上下文
-│   ├── config.py                    # 设置、版本号与运行时路径
-│   ├── persistence.py               # JSON 原子持久化
-│   ├── security.py                  # 来源、会话与访问密钥校验
-│   └── startup.py                   # 启动检查（端口占用 + 单实例检测）
-
-run.py                               # 启动脚本（双服务）
-pattern-generator.spec                # PyInstaller 打包配置
-requirements.txt                      # 依赖清单
+pattern-generator/
+├── run.py                           # 命令行启动、预检与双服务入口
+├── src/
+│   ├── common/
+│   │   ├── config.py                # 版本、配置目录、分文件读写和旧配置迁移
+│   │   ├── compute.py               # 外部 Python 查找、引擎探测与全局选择
+│   │   ├── app_context.py           # 共享状态、自动并发容量与任务上下文
+│   │   ├── startup.py               # 端口和单实例检查
+│   │   ├── persistence.py           # JSON 持久化
+│   │   ├── security.py              # 访问与会话校验
+│   │   └── notification_channels.py # 通知渠道适配
+│   ├── core/
+│   │   ├── config.py / models.py    # 五种模型的参数与方程
+│   │   ├── engines.py               # 七种引擎的统一接口与实际运算探测
+│   │   ├── numba_kernels.py         # Numba CPU 内核
+│   │   ├── warp_kernels.py          # NVIDIA Warp CPU/CUDA 内核
+│   │   ├── taichi_kernels.py        # Taichi CPU/CUDA/Vulkan 内核
+│   │   ├── opencl_kernels.cl        # PyOpenCL 计算内核
+│   │   ├── simulation.py            # 网格迭代与模拟流程
+│   │   ├── external_worker.py       # 外部 Python 执行的计算入口
+│   │   ├── task_worker.py           # 独立任务进程
+│   │   └── visualization.py         # 图表数据生成
+│   ├── web/
+│   │   ├── server.py                # 前台 FastAPI 接口与页面路由
+│   │   ├── templates/              # 主界面及页面组件
+│   │   └── static/                 # 前台 CSS/JS、共用组件和本地 Plotly.js
+│   └── admin/
+│       ├── server.py                # 后台 FastAPI 接口与页面路由
+│       ├── tasks.py / clients.py    # 队列调度与客户端管理
+│       ├── monitor.py / reports.py  # 资源监控与报表导出
+│       ├── access_control.py        # 黑白名单与访问控制
+│       ├── notifications.py         # 后台告警
+│       ├── result_store.py          # 结果磁盘缓存
+│       ├── logger.py / websocket.py # 日志与实时消息
+│       ├── templates/              # 后台页面及组件
+│       └── static/                 # 后台 CSS/JS
+├── config/                          # 按功能分开的服务端配置及状态
+├── requirements.txt                 # 应用依赖及注释的可选计算引擎清单
+├── requirements-build.txt           # 打包构建依赖
+├── pattern-generator.spec           # PyInstaller 打包配置
+└── docs/                            # 计算引擎、配置及分批验收说明
 ```
 
 
